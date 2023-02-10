@@ -50,10 +50,9 @@ async def get_current_user(
     user = await Account.get_or_none(email=email)
     if user is not None and verify_password(credentials.password, user.password_hash):
         return user
-    return None
-    # raise HTTPException(
-    #     status_code=status.HTTP_401_UNAUTHORIZED,
-    # )
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+    )
 
 
 def validate_id(id_val: int) -> int:
@@ -65,7 +64,7 @@ def validate_id(id_val: int) -> int:
 @app.get("/accounts/{id_val}", response_model=Account_Pydantic)
 async def get_account(
     account_id: int = Depends(validate_id),
-    # current_user: Account = Depends(get_current_user)
+    current_user: Account | None = Depends(get_current_user),
 ):
     return await Account_Pydantic.from_queryset_single(Account.get(id=account_id))
 

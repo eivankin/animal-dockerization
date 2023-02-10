@@ -14,6 +14,10 @@ TEST_ACCOUNT = AccountIn(
         "password": "password",
     }
 )
+BAD_HEADER = (
+    "Basic ZWQ4YzgwZDAtMjZlZi00NjEzLWFiOGYtNGVkNDkxZjAyOTNkOjMxZjc3NThkL"
+    "WZhMTYtNDJmNy1iNjMzLWNjYmYxYzIzNmQ3Nw=="
+)
 
 
 @pytest.fixture(scope="module")
@@ -53,6 +57,17 @@ async def test_create_user(client: AsyncClient):
 
 
 @pytest.mark.anyio
+async def test_create_user_invalid_email(client: AsyncClient):
+    account = TEST_ACCOUNT.copy()
+    account.email = "sus"
+    response = await client.post(
+        "/registration",
+        json=account.dict(),
+    )
+    assert response.status_code == 400, response.text
+
+
+@pytest.mark.anyio
 async def test_create_user_blank_field(client: AsyncClient):
     account = TEST_ACCOUNT.copy()
     account.first_name = " "
@@ -75,14 +90,17 @@ async def test_get_user(client: AsyncClient, auth_headers: dict[str, str]):
     assert data["firstName"] == TEST_ACCOUNT.first_name
 
 
-# @pytest.mark.anyio
-# async def test_get_user_unauthorized(client: AsyncClient):
-#     client.headers.clear()
-#     existing_user = await Account.get(email=TEST_ACCOUNT.email)
-#     response = await client.get(
-#         f"/accounts/{existing_user.id}",
-#     )
-#     assert response.status_code == 401, response.text
+@pytest.mark.anyio
+async def test_get_user_unauthorized(client: AsyncClient, auth_headers: dict[str, str]):
+    client.headers.clear()
+    headers = auth_headers.copy()
+    headers["Authorization"] = BAD_HEADER
+    client.headers.update(headers)
+    existing_user = await Account.get(email=TEST_ACCOUNT.email)
+    response = await client.get(
+        f"/accounts/{existing_user.id}",
+    )
+    assert response.status_code == 401, response.text
 
 
 @pytest.mark.anyio
@@ -96,6 +114,7 @@ async def test_get_user_negative_id(client: AsyncClient, auth_headers: dict[str,
 
 @pytest.mark.anyio
 async def test_create_user_not_unique_email(client: AsyncClient):
+    client.headers.clear()
     account = TEST_ACCOUNT.copy()
     account.first_name = "test"
     account.last_name = "test"

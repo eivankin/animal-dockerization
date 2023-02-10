@@ -3,7 +3,7 @@ from tortoise import fields, models, validators
 from tortoise.contrib.pydantic import pydantic_model_creator
 from pydantic import BaseConfig, BaseModel, EmailStr
 from humps import camelize
-from constants import EMAIL_REGEX, NON_BLANK_REGEX
+from constants import NON_BLANK_REGEX
 import enum
 
 NON_BLANK_VALIDATORS = [
@@ -24,7 +24,6 @@ class Account(models.Model):
     last_name = fields.CharField(max_length=255, validators=NON_BLANK_VALIDATORS)
     email = fields.CharField(
         max_length=255,
-        validators=[validators.RegexValidator(EMAIL_REGEX, flags=0)],
         unique=True,
     )
     password_hash = fields.CharField(max_length=128)
