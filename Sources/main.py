@@ -14,7 +14,7 @@ from models import (
     AccountIn,
     Animal,
     Animal_Pydantic,
-    AnimalIn_Pydantic,
+    AnimalIn,
     Location_Pydantic,
     Location,
     LocationIn_Pydantic,
@@ -181,13 +181,35 @@ async def get_animal(
     "/animals", response_model=Animal_Pydantic, status_code=status.HTTP_201_CREATED
 )
 async def create_animal(
-    animal: AnimalIn_Pydantic, current_user: Account | None = Depends(get_current_user)
+    animal: AnimalIn, current_user: Account | None = Depends(get_current_user)
 ):
-    # TODO
+
     login_required(current_user)
-    return await Animal_Pydantic.from_tortoise_orm(
-        await Animal.create(**animal.dict(exclude_unset=True))
+    type_ids = animal.animal_types
+    data = animal.dict(exclude_unset=True)
+    del data["animal_types"]
+    data["chipper"] = await Account.get(id=animal.chipper_id)
+    data["chipper_location"] = await Location.get(id=animal.chipping_location_id)
+    saved_animal = await Animal.create(**data)
+    await saved_animal.animal_types.add(
+        *(e for e in await AnimalType.filter(id__in=type_ids))
     )
+
+    return await Animal_Pydantic.from_tortoise_orm(saved_animal)
+
+
+@app.delete("/animals/{id_val}")
+async def delete_animal(
+    animal_id: int = Depends(validate_id),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+
+    animal = await Animal.get(id=animal_id)
+    await animal.fetch_related("visited_locations")
+    if len(animal.visited_locations) > 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+    await animal.delete()
 
 
 @app.get("/locations/{id_val}", response_model=Location_Pydantic)

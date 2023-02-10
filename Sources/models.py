@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pydantic
 from tortoise import fields, models, validators
 from tortoise.contrib.pydantic import pydantic_model_creator
@@ -120,13 +122,13 @@ class Animal(models.Model):
         "models.Location", on_delete=fields.RESTRICT
     )
     animal_types = fields.ManyToManyField(
-        "models.AnimalType", on_delete=fields.RESTRICT
+        "models.AnimalType", on_delete=fields.CASCADE
     )
-    life_status = fields.CharEnumField(AnimalLifeStatus)
+    life_status = fields.CharEnumField(AnimalLifeStatus, default=AnimalLifeStatus.ALIVE)
     gender = fields.CharEnumField(AnimalGender)
     chipping_date_time = fields.DatetimeField(auto_now_add=True)
-    chipper_id = fields.ForeignKeyField("models.Account", on_delete=fields.RESTRICT)
-    chipping_location_id = fields.ForeignKeyField(
+    chipper = fields.ForeignKeyField("models.Account", on_delete=fields.RESTRICT)
+    chipping_location = fields.ForeignKeyField(
         "models.Location", on_delete=fields.RESTRICT, related_name=False
     )
     death_date_time = fields.DatetimeField(null=True)
@@ -135,6 +137,16 @@ class Animal(models.Model):
 Animal_Pydantic = pydantic_model_creator(
     Animal, name="Animal", config_class=CamelCaseConfig
 )
-AnimalIn_Pydantic = pydantic_model_creator(
-    Animal, name="AnimalIn", config_class=CamelCaseConfig, exclude_readonly=True
-)
+
+
+class AnimalIn(BaseModel):
+    animal_types: list[int]
+    weight: float
+    length: float
+    height: float
+    gender: AnimalGender
+    chipper_id: int
+    chipping_location_id: int
+
+    class Config(CamelCaseConfig):
+        orm_mode = True

@@ -154,3 +154,39 @@ async def test_delete_nonexistent_location(
         f"/locations/1",
     )
     assert response.status_code == 404, response.text
+
+
+@pytest.mark.anyio
+async def test_create_animal(client: AsyncClient, auth_headers: dict[str, str]):
+    client.headers.update(auth_headers)
+    await client.post(
+        "/locations",
+        json={
+            "latitude": 37.7882,
+            "longitude": -122.4324,
+        },
+    )
+
+    response = await client.post(
+        "/animals",
+        json={
+            "animalTypes": [],
+            "weight": 2315.8057,
+            "length": 12.2942915,
+            "height": 2.0351095,
+            "gender": "FEMALE",
+            "chipperId": 1,
+            "chippingLocationId": 1,
+        },
+    )
+    assert response.status_code == 201, response.text
+
+
+@pytest.mark.anyio
+async def test_delete_animal(client: AsyncClient, auth_headers: dict[str, str]):
+    client.headers.update(auth_headers)
+
+    response = await client.delete(
+        "/animals/1",
+    )
+    assert response.status_code == 200, response.text
