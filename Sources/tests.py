@@ -146,7 +146,9 @@ async def test_search_user_invalid(client: AsyncClient):
 
 
 @pytest.mark.anyio
-async def test_delete_nonexistent_location(client: AsyncClient, auth_headers: dict[str, str]):
+async def test_delete_nonexistent_location(
+    client: AsyncClient, auth_headers: dict[str, str]
+):
     client.headers.update(auth_headers)
     response = await client.delete(
         f"/locations/1",

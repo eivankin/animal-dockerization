@@ -85,7 +85,9 @@ LocationIn_Pydantic = pydantic_model_creator(
 
 class AnimalType(models.Model):
     id = fields.IntField(pk=True)
-    type = fields.CharField(max_length=255, unique=True, validators=NON_BLANK_VALIDATORS)
+    type = fields.CharField(
+        max_length=255, unique=True, validators=NON_BLANK_VALIDATORS
+    )
 
 
 AnimalType_Pydantic = pydantic_model_creator(

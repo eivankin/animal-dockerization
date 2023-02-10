@@ -19,7 +19,8 @@ from models import (
     Location,
     LocationIn_Pydantic,
     AnimalType,
-    AnimalType_Pydantic, AnimalTypeIn_Pydantic,
+    AnimalType_Pydantic,
+    AnimalTypeIn_Pydantic,
 )
 
 app = FastAPI(debug=DEBUG)
@@ -108,6 +109,37 @@ async def get_account(
     current_user: Account | None = Depends(get_current_user),
 ):
     return await Account_Pydantic.from_queryset_single(Account.get(id=account_id))
+
+
+@app.put("/accounts/{id_val}", response_model=Account_Pydantic)
+async def update_account(
+    new_account: AccountIn,
+    account_id: int = Depends(validate_id),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    if current_user.id != account_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    account = await Account.get(id=account_id)
+    await account.update_from_dict(new_account.dict())
+    pwd_hash = get_password_hash(new_account.password)
+    account.password_hash = pwd_hash
+    await account.save()
+    return account
+
+
+@app.delete("/accounts/{id_val}")
+async def delete_account(
+    account_id: int = Depends(validate_id),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    if current_user.id != account_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    account = await Account.get(id=account_id)
+    await account.delete()
 
 
 @app.post(
@@ -212,7 +244,11 @@ async def get_animal_type(
     )
 
 
-@app.post("/animals/types", response_model=AnimalType_Pydantic, status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/animals/types",
+    response_model=AnimalType_Pydantic,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_animal_type(
     animal_type: AnimalTypeIn_Pydantic,
     current_user: Account | None = Depends(get_current_user),
