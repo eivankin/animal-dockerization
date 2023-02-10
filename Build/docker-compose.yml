@@ -4,8 +4,8 @@ services:
 # Сервис для разворачивания контейнера с базой данных
   database:
     image: postgres:latest
-    volumes:
-      - /var/lib/postgresql/data/
+#    volumes:
+#      - /var/lib/postgresql/data/
     environment:
       - POSTGRES_DB=animal-chipization
       - POSTGRES_USER=user
@@ -21,6 +21,7 @@ services:
       - database
     environment:
       - DB_URL=postgres://user:password@database:5432/animal-chipization
+#      - DB_URL=sqlite://db.sqlite3
       - DEBUG=True
       - WAIT_FOR_IT=database:5432
 
