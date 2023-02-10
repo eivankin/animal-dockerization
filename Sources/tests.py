@@ -124,3 +124,22 @@ async def test_create_user_not_unique_email(client: AsyncClient):
         json=account.dict(),
     )
     assert response.status_code == 409, response.text
+
+
+@pytest.mark.anyio
+async def test_search_user(client: AsyncClient):
+    response = await client.get(
+        f"/accounts/search?email={TEST_ACCOUNT.email[:5].upper()}"
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["firstName"] == TEST_ACCOUNT.first_name
+
+
+@pytest.mark.anyio
+async def test_search_user_invalid(client: AsyncClient):
+    response = await client.get(
+        f"/accounts/search?from=-1&email={TEST_ACCOUNT.email[:5].upper()}"
+    )
+    assert response.status_code == 400, response.text

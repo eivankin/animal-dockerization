@@ -3,7 +3,7 @@ import tortoise
 from fastapi.exceptions import RequestValidationError
 from passlib.context import CryptContext
 from tortoise.contrib.fastapi import register_tortoise
-from fastapi import FastAPI, Depends, status, HTTPException
+from fastapi import FastAPI, Depends, status, HTTPException, Query
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import PlainTextResponse
 
@@ -59,6 +59,24 @@ def validate_id(id_val: int) -> int:
     if id_val < 1:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
     return id_val
+
+
+@app.get("/accounts/search", response_model=list[Account_Pydantic])
+async def search_account(
+    current_user: Account | None = Depends(get_current_user),
+    first_name_like: str = Query(default="", alias="firstName"),
+    last_name_like: str = Query(default="", alias="lastName"),
+    email_like: str = Query(default="", alias="email"),
+    from_: int = Query(default=0, ge=0, alias="from"),
+    size: int = Query(default=10, ge=1),
+):
+    return await Account_Pydantic.from_queryset(
+        Account.filter(
+            first_name__icontains=first_name_like,
+            last_name__icontains=last_name_like,
+            email__icontains=email_like,
+        ).offset(from_).limit(size)
+    )
 
 
 @app.get("/accounts/{id_val}", response_model=Account_Pydantic)
