@@ -143,3 +143,12 @@ async def test_search_user_invalid(client: AsyncClient):
         f"/accounts/search?from=-1&email={TEST_ACCOUNT.email[:5].upper()}"
     )
     assert response.status_code == 400, response.text
+
+
+@pytest.mark.anyio
+async def test_delete_nonexistent_location(client: AsyncClient, auth_headers: dict[str, str]):
+    client.headers.update(auth_headers)
+    response = await client.delete(
+        f"/locations/1",
+    )
+    assert response.status_code == 404, response.text

@@ -32,6 +32,27 @@ class Account(models.Model):
         exclude = ["password_hash"]
 
 
+Account_Pydantic = pydantic_model_creator(
+    Account, name="Account", config_class=CamelCaseConfig
+)
+
+
+class AccountIn(BaseModel):
+    email: EmailStr
+    password: str
+    first_name: str
+    last_name: str
+
+    class Config(CamelCaseConfig):
+        orm_mode = True
+
+    @pydantic.validator("password")
+    def validate_password(cls, v):
+        for validator in NON_BLANK_VALIDATORS:
+            validator(v)
+        return v
+
+
 class Location(models.Model):
     id = fields.IntField(pk=True)
 
@@ -54,9 +75,26 @@ class Location(models.Model):
     )
 
 
+Location_Pydantic = pydantic_model_creator(
+    Location, name="Location", config_class=CamelCaseConfig
+)
+LocationIn_Pydantic = pydantic_model_creator(
+    Location, name="LocationIn", config_class=CamelCaseConfig, exclude_readonly=True
+)
+
+
 class AnimalType(models.Model):
     id = fields.IntField(pk=True)
-    type = fields.CharField(max_length=255, unique=True)
+    type = fields.CharField(max_length=255, unique=True, validators=NON_BLANK_VALIDATORS)
+
+
+AnimalType_Pydantic = pydantic_model_creator(
+    AnimalType, name="AnimalType", config_class=CamelCaseConfig
+)
+
+AnimalTypeIn_Pydantic = pydantic_model_creator(
+    AnimalType, name="AnimalTypeIn", config_class=CamelCaseConfig, exclude_readonly=True
+)
 
 
 class AnimalLifeStatus(enum.StrEnum):
@@ -92,22 +130,9 @@ class Animal(models.Model):
     death_date_time = fields.DatetimeField(null=True)
 
 
-Account_Pydantic = pydantic_model_creator(
-    Account, name="Account", config_class=CamelCaseConfig
+Animal_Pydantic = pydantic_model_creator(
+    Animal, name="Animal", config_class=CamelCaseConfig
 )
-
-
-class AccountIn(BaseModel):
-    email: EmailStr
-    password: str
-    first_name: str
-    last_name: str
-
-    class Config(CamelCaseConfig):
-        orm_mode = True
-
-    @pydantic.validator("password")
-    def validate_password(cls, v):
-        for validator in NON_BLANK_VALIDATORS:
-            validator(v)
-        return v
+AnimalIn_Pydantic = pydantic_model_creator(
+    Animal, name="AnimalIn", config_class=CamelCaseConfig, exclude_readonly=True
+)
