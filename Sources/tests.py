@@ -244,13 +244,3 @@ async def test_update_animal(client: AsyncClient, auth_headers: dict[str, str]):
         },
     )
     assert response.status_code == 200, response.text
-
-
-# @pytest.mark.anyio
-# async def test_delete_animal(client: AsyncClient, auth_headers: dict[str, str]):
-#     client.headers.update(auth_headers)
-#
-#     response = await client.delete(
-#         "/animals/1",
-#     )
-#     assert response.status_code == 200, response.text

@@ -226,7 +226,7 @@ async def update_animal(
 
     if (
         len(animal.visited_locations) > 0
-        and animal.visited_locations[0] == new_animal.chipping_location_id
+        and animal.visited_locations[0] == new_animal.chipping_location
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="has same chipping location"
@@ -521,7 +521,7 @@ async def update_animal_location(
         id=update_visited_location.visited_location_point_id
     )
 
-    if visited_location.location == new_location:
+    if visited_location.location_point == new_location:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
     if (

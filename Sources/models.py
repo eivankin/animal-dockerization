@@ -180,16 +180,10 @@ class UpdateAnimalType(BaseModel):
     class Config(CamelCaseConfig):
         pass
 
-    @pydantic.validator("new_type_id")
+    @pydantic.validator("new_type_id", "old_type_id")
     def validate_new_type_id(cls, v: int) -> int:
         if v < 1:
-            raise ValidationError("new_type_id must be greater than 0")
-        return v
-
-    @pydantic.validator("old_type_id")
-    def validate_old_type_id(cls, v: int) -> int:
-        if v < 1:
-            raise ValidationError("old_type_id must be greater than 0")
+            raise ValidationError("id must be greater than 0")
         return v
 
 
@@ -216,6 +210,12 @@ class VisitedLocationOut(BaseModel):
     class Config(CamelCaseConfig):
         orm_mode = True
 
+    @pydantic.validator("location_point_id")
+    def validate_location_point_id(cls, v: int) -> int:
+        if v < 1:
+            raise ValidationError("id must be greater than 0")
+        return v
+
 
 class UpdateVisitedLocation(BaseModel):
     visited_location_point_id: int
@@ -223,6 +223,12 @@ class UpdateVisitedLocation(BaseModel):
 
     class Config(CamelCaseConfig):
         pass
+
+    @pydantic.validator("visited_location_point_id", "location_point_id")
+    def validate_id(cls, v: int) -> int:
+        if v < 1:
+            raise ValidationError("id must be greater than 0")
+        return v
 
 
 class Location(models.Model):
