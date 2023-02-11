@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from tortoise.exceptions import IntegrityError
 
 import pydantic
@@ -235,7 +235,7 @@ async def update_animal(
     await animal.update_from_dict(new_animal.dict(exclude_unset=True))
 
     if animal.life_status == AnimalLifeStatus.DEAD and animal.death_date_time is None:
-        animal.death_date_time = datetime.utcnow()
+        animal.death_date_time = datetime.now(tz=timezone.utc)
 
     await animal.save()
     return await AnimalOut.from_orm(animal)
