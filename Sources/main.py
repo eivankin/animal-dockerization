@@ -441,7 +441,6 @@ async def get_animal_locations(
 ):
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
-    point_ids = [location.id for location in animal.visited_locations]
     query = animal.visited_locations_junction.all()
     if start_date_time is not None:
         query = query.filter(date_time_of_visit_location_point__gte=start_date_time)
