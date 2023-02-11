@@ -79,6 +79,7 @@ class Animal(models.Model):
         forward_key="location_point_id",
         related_name="visited_by",
     )
+    visited_locations_junction: fields.ForeignKeyRelation
     animal_types = fields.ManyToManyField(
         "models.AnimalType", on_delete=fields.CASCADE, related_name="animals"
     )
@@ -199,7 +200,11 @@ class UpdateAnimalType(BaseModel):
 
 class AnimalVisitedLocation(models.Model):
     id = fields.IntField(pk=True)
-    animal = fields.ForeignKeyField("models.Animal", on_delete=fields.CASCADE)
+    animal = fields.ForeignKeyField(
+        "models.Animal",
+        on_delete=fields.CASCADE,
+        related_name="visited_locations_junction",
+    )
     location_point = fields.ForeignKeyField(
         "models.Location", on_delete=fields.RESTRICT
     )

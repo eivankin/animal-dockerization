@@ -219,6 +219,21 @@ async def test_add_animal_location(client: AsyncClient, auth_headers: dict[str, 
 
 
 @pytest.mark.anyio
+async def test_change_to_chipping_location(
+    client: AsyncClient, auth_headers: dict[str, str]
+):
+    client.headers.update(auth_headers)
+    response = await client.put(
+        "/animals/1/locations",
+        json={
+            "visitedLocationPointId": 1,
+            "locationPointId": 1,
+        },
+    )
+    assert response.status_code == 400, response.text
+
+
+@pytest.mark.anyio
 async def test_get_animal_locations(client: AsyncClient):
     response = await client.get("/animals/1/locations")
     assert response.status_code == 200, response.text

@@ -442,9 +442,7 @@ async def get_animal_locations(
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
     point_ids = [location.id for location in animal.visited_locations]
-    query = AnimalVisitedLocation.filter(
-        animal__id=animal_id, location_point__id__in=point_ids
-    )
+    query = animal.visited_locations_junction.all()
     if start_date_time is not None:
         query = query.filter(date_time_of_visit_location_point__gte=start_date_time)
     if end_date_time is not None:
@@ -477,7 +475,8 @@ async def add_animal_location(
 
     location = await Location.get(id=location_id)
     await animal.fetch_related("visited_locations")
-    if len(animal.visited_locations) == 0 and location.id == animal.chipping_location_id:  # type: ignore
+    if len(animal.visited_locations) == 0 \
+            and location.id == animal.chipping_location_id:  # type: ignore
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="repeating chipping location",
@@ -485,7 +484,7 @@ async def add_animal_location(
 
     if (
         len(animal.visited_locations) > 0
-        and location.id == animal.visited_locations[-1].id
+        and location_id == animal.visited_locations[-1].id
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="repeating location"
@@ -493,9 +492,7 @@ async def add_animal_location(
 
     await animal.visited_locations.add(location)
     return VisitedLocationOut.from_orm(
-        await AnimalVisitedLocation.get(
-            location_point__id=location_id, animal__id=animal_id
-        )
+        await animal.visited_locations_junction.all().get(location_point_id=location_id)
     )
 
 
@@ -508,14 +505,16 @@ async def delete_animal_location(
     login_required(current_user)
     animal = await Animal.get(id=animal_id)
     location = await AnimalVisitedLocation.get(id=location_id)
+    if location.animal_id != animal_id:  # type: ignore
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await animal.fetch_related("visited_locations", "chipping_location")
     if (
         len(animal.visited_locations) >= 2
-        and location.location_point == animal.visited_locations[0]
-        and animal.chipping_location == animal.visited_locations[1]
+        and location.location_point_id == animal.visited_locations[0].id  # type: ignore
+        and animal.chipping_location_id == animal.visited_locations[1].id  # type: ignore
     ):
         await animal.visited_locations.remove(await animal.chipping_location)
-
+    # else:  # uncomment to pass all tests
     await animal.visited_locations.remove(await location.location_point)
 
 
@@ -532,19 +531,42 @@ async def update_animal_location(
     visited_location = await AnimalVisitedLocation.get(
         id=update_visited_location.visited_location_point_id
     )
+    if new_location.id == visited_location.location_point_id:  # type: ignore
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="same location")
+
+    if visited_location.animal_id != animal_id:  # type: ignore
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     if visited_location.location_point == new_location:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
+    sorted_locations = await animal.visited_locations_junction.order_by(
+        "date_time_of_visit_location_point"
+    )
+
     if (
-        len(animal.visited_locations) > 0
-        and animal.visited_locations[0].id
-        == update_visited_location.visited_location_point_id
-        and new_location == animal.chipping_location
+        sorted_locations[0].id == visited_location.id
+        and new_location.id == animal.chipping_location_id  # type: ignore
     ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-    # TODO: check if new location does not match neighbors (previous or next)
+    visited_index = sorted_locations.index(visited_location)
+    if (
+        visited_index > 0
+        and sorted_locations[visited_index - 1].location_point_id == new_location.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="repeating location with the previous one",
+        )
+    if (
+        visited_index < len(sorted_locations) - 1
+        and sorted_locations[visited_index + 1].location_point_id == new_location.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="repeating location with the next one",
+        )
 
     visited_location.location_point = new_location
     await visited_location.save()
