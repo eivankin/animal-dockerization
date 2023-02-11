@@ -125,7 +125,8 @@ class AnimalOut(BaseModel):
             gender=animal.gender,
             animal_types=[t.id for t in await animal.animal_types],
             chipper_id=animal.chipper_id,  # type: ignore
-            visited_locations=[lc.id for lc in await animal.visited_locations],
+            visited_locations=[lc.id for lc in
+                               await AnimalVisitedLocation.filter(animal_id=animal.id)],
             chipping_location_id=animal.chipping_location_id,  # type: ignore
             death_date_time=animal.death_date_time,
             life_status=animal.life_status,
@@ -168,9 +169,17 @@ class AnimalIn(BaseModel):
         return v
 
 
-AnimalUpdate_Pydantic = pydantic_model_creator(
-    Animal, name="AnimalUpdate", config_class=CamelCaseConfig, exclude_readonly=True
-)
+class AnimalUpdate(BaseModel):
+    weight: float
+    height: float
+    length: float
+    gender: AnimalGender
+    life_status: AnimalLifeStatus
+    chipper_id: int
+    chipping_location_id: int
+
+    class Config(CamelCaseConfig):
+        pass
 
 
 class UpdateAnimalType(BaseModel):

@@ -193,6 +193,14 @@ async def test_get_animal(client: AsyncClient):
 
 
 @pytest.mark.anyio
+async def test_add_chipping_location(client: AsyncClient):
+    response = await client.post(
+        "/animals/1/locations/1",
+    )
+    assert response.status_code == 400, response.text
+
+
+@pytest.mark.anyio
 async def test_add_animal_location(client: AsyncClient, auth_headers: dict[str, str]):
     client.headers.update(auth_headers)
     response = await client.post(

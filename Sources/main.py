@@ -28,8 +28,8 @@ from models import (
     UpdateAnimalType,
     AnimalVisitedLocation,
     UpdateVisitedLocation,
-    AnimalUpdate_Pydantic,
     VisitedLocationOut,
+    AnimalUpdate,
 )
 
 app = FastAPI(debug=DEBUG)
@@ -208,7 +208,7 @@ async def get_animal(
 
 @app.put("/animals/{animal_id}", response_model=AnimalOut)
 async def update_animal(
-    new_animal: AnimalUpdate_Pydantic,
+    new_animal: AnimalUpdate,
     animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
@@ -226,12 +226,14 @@ async def update_animal(
 
     if (
         len(animal.visited_locations) > 0
-        and animal.visited_locations[0] == new_animal.chipping_location
+        and animal.visited_locations[0].id == new_animal.chipping_location_id
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="has same chipping location"
         )
 
+    await Location.get(id=new_animal.chipping_location_id)  # check if location exists
+    await Account.get(id=new_animal.chipper_id)  # check if account exists
     await animal.update_from_dict(new_animal.dict(exclude_unset=True))
 
     if animal.life_status == AnimalLifeStatus.DEAD and animal.death_date_time is None:
@@ -403,7 +405,7 @@ async def create_animal_type(
 
 
 @app.put("/animals/types/{animal_type_id}", response_model=AnimalType_Pydantic)
-async def update_animal_type(
+async def update_assigned_animal_type(
     new_type: AnimalTypeIn_Pydantic,
     animal_type_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
@@ -473,10 +475,13 @@ async def add_animal_location(
 
     location = await Location.get(id=location_id)
     await animal.fetch_related("visited_locations")
-    if len(animal.visited_locations) == 0 and location == animal.chipping_location:
+    if len(animal.visited_locations) == 0 and location.id == animal.chipping_location_id:  # type: ignore
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-    if len(animal.visited_locations) > 0 and location == animal.visited_locations[-1]:
+    if (
+        len(animal.visited_locations) > 0
+        and location.id == animal.visited_locations[-1].id
+    ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
     await animal.visited_locations.add(location)
@@ -495,11 +500,11 @@ async def delete_animal_location(
 ):
     login_required(current_user)
     animal = await Animal.get(id=animal_id)
-    location = await Location.get(id=location_id)
+    location = await AnimalVisitedLocation.get(id=location_id)
     await animal.fetch_related("visited_locations", "chipping_location")
     if (
         len(animal.visited_locations) >= 2
-        and location == animal.visited_locations[0]
+        and location.location_point == animal.visited_locations[0]
         and animal.chipping_location == animal.visited_locations[1]
     ):
         animal.visited_locations.remove(animal.chipping_location)
