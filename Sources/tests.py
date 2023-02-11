@@ -167,10 +167,12 @@ async def test_create_animal(client: AsyncClient, auth_headers: dict[str, str]):
         },
     )
 
+    await client.post("/animals/types", json={"type": "cat"})
+
     response = await client.post(
         "/animals",
         json={
-            "animalTypes": [],
+            "animalTypes": [1],
             "weight": 2315.8057,
             "length": 12.2942915,
             "height": 2.0351095,
@@ -222,6 +224,26 @@ async def test_get_animals(client: AsyncClient):
     assert response.status_code == 200, response.text
     data = response.json()
     assert len(data) > 0
+
+
+@pytest.mark.anyio
+async def test_update_animal(client: AsyncClient, auth_headers: dict[str, str]):
+    client.headers.update(auth_headers)
+
+    response = await client.put(
+        "/animals/1",
+        json={
+            "animalTypes": [1],
+            "weight": 2315.8057,
+            "length": 12.2942915,
+            "height": 2.0351095,
+            "gender": "MALE",
+            "chipperId": 1,
+            "chippingLocationId": 1,
+            "lifeStatus": "DEAD",
+        },
+    )
+    assert response.status_code == 200, response.text
 
 
 # @pytest.mark.anyio

@@ -1,10 +1,9 @@
 from datetime import datetime
 
 import pydantic
-import tortoise
 from tortoise import fields, models, validators
 from tortoise.contrib.pydantic import pydantic_model_creator
-from pydantic import BaseConfig, BaseModel, EmailStr
+from pydantic import BaseConfig, BaseModel, EmailStr, ValidationError
 from humps import camelize
 from constants import NON_BLANK_REGEX
 import enum
@@ -56,52 +55,6 @@ class AccountIn(BaseModel):
         return v
 
 
-class Location(models.Model):
-    id = fields.IntField(pk=True)
-
-    # Широта
-    latitude = fields.FloatField(
-        validators=[
-            validators.MaxValueValidator(90),
-            validators.MinValueValidator(-90),
-        ],
-        unique=True,
-    )
-
-    # Долгота
-    longitude = fields.FloatField(
-        validators=[
-            validators.MaxValueValidator(180),
-            validators.MinValueValidator(-180),
-        ],
-        unique=True,
-    )
-
-
-Location_Pydantic = pydantic_model_creator(
-    Location, name="Location", config_class=CamelCaseConfig
-)
-LocationIn_Pydantic = pydantic_model_creator(
-    Location, name="LocationIn", config_class=CamelCaseConfig, exclude_readonly=True
-)
-
-
-class AnimalType(models.Model):
-    id = fields.IntField(pk=True)
-    type = fields.CharField(
-        max_length=255, unique=True, validators=NON_BLANK_VALIDATORS
-    )
-
-
-AnimalType_Pydantic = pydantic_model_creator(
-    AnimalType, name="AnimalType", config_class=CamelCaseConfig
-)
-
-AnimalTypeIn_Pydantic = pydantic_model_creator(
-    AnimalType, name="AnimalTypeIn", config_class=CamelCaseConfig, exclude_readonly=True
-)
-
-
 class AnimalLifeStatus(enum.StrEnum):
     ALIVE = "ALIVE"
     DEAD = "DEAD"
@@ -124,14 +77,17 @@ class Animal(models.Model):
         on_delete=fields.RESTRICT,
         through="animal_visited_location",
         forward_key="location_point_id",
+        related_name="visited_by",
     )
-    animal_types = fields.ManyToManyField("models.AnimalType", on_delete=fields.CASCADE)
+    animal_types = fields.ManyToManyField(
+        "models.AnimalType", on_delete=fields.CASCADE, related_name="animals"
+    )
     life_status = fields.CharEnumField(AnimalLifeStatus, default=AnimalLifeStatus.ALIVE)
     gender = fields.CharEnumField(AnimalGender)
     chipping_date_time = fields.DatetimeField(auto_now_add=True)
     chipper = fields.ForeignKeyField("models.Account", on_delete=fields.RESTRICT)
     chipping_location = fields.ForeignKeyField(
-        "models.Location", on_delete=fields.CASCADE, related_name=False
+        "models.Location", on_delete=fields.CASCADE, related_name="chipped_animals"
     )
     death_date_time = fields.DatetimeField(null=True)
 
@@ -191,6 +147,26 @@ class AnimalIn(BaseModel):
     class Config(CamelCaseConfig):
         orm_mode = True
 
+    @pydantic.validator("animal_types")
+    def validate_animal_types(cls, v: list[int]) -> list[int]:
+        if not v:
+            raise ValidationError("animal_types must not be empty")
+        if any(t < 1 for t in v):
+            raise ValidationError("each element of animal_types must be greater than 0")
+        return v
+
+    @pydantic.validator("weight", "length", "height")
+    def validate_characteristics(cls, v: float) -> float:
+        if v <= 0:
+            raise ValidationError("weight, length and height must be greater than 0")
+        return v
+
+    @pydantic.validator("chipping_location_id", "chipper_id")
+    def validate_chipping_location_id(cls, v: int) -> int:
+        if v < 1:
+            raise ValidationError("id must be greater than 0")
+        return v
+
 
 AnimalUpdate_Pydantic = pydantic_model_creator(
     Animal, name="AnimalUpdate", config_class=CamelCaseConfig, exclude_readonly=True
@@ -204,11 +180,25 @@ class UpdateAnimalType(BaseModel):
     class Config(CamelCaseConfig):
         pass
 
+    @pydantic.validator("new_type_id")
+    def validate_new_type_id(cls, v: int) -> int:
+        if v < 1:
+            raise ValidationError("new_type_id must be greater than 0")
+        return v
+
+    @pydantic.validator("old_type_id")
+    def validate_old_type_id(cls, v: int) -> int:
+        if v < 1:
+            raise ValidationError("old_type_id must be greater than 0")
+        return v
+
 
 class AnimalVisitedLocation(models.Model):
     id = fields.IntField(pk=True)
     animal = fields.ForeignKeyField("models.Animal", on_delete=fields.CASCADE)
-    location_point = fields.ForeignKeyField("models.Location", on_delete=fields.CASCADE)
+    location_point = fields.ForeignKeyField(
+        "models.Location", on_delete=fields.RESTRICT
+    )
     date_time_of_visit_location_point = fields.DatetimeField(auto_now_add=True)
 
     class PydanticMeta:
@@ -233,3 +223,52 @@ class UpdateVisitedLocation(BaseModel):
 
     class Config(CamelCaseConfig):
         pass
+
+
+class Location(models.Model):
+    id = fields.IntField(pk=True)
+
+    # Широта
+    latitude = fields.FloatField(
+        validators=[
+            validators.MaxValueValidator(90),
+            validators.MinValueValidator(-90),
+        ],
+        unique=True,
+    )
+
+    # Долгота
+    longitude = fields.FloatField(
+        validators=[
+            validators.MaxValueValidator(180),
+            validators.MinValueValidator(-180),
+        ],
+        unique=True,
+    )
+    chipped_animals: fields.ForeignKeyRelation[Animal]
+    visited_by: fields.ManyToManyRelation[Animal]
+
+
+Location_Pydantic = pydantic_model_creator(
+    Location, name="Location", config_class=CamelCaseConfig
+)
+LocationIn_Pydantic = pydantic_model_creator(
+    Location, name="LocationIn", config_class=CamelCaseConfig, exclude_readonly=True
+)
+
+
+class AnimalType(models.Model):
+    id = fields.IntField(pk=True)
+    type = fields.CharField(
+        max_length=255, unique=True, validators=NON_BLANK_VALIDATORS
+    )
+    animals: fields.ManyToManyRelation[Animal]
+
+
+AnimalType_Pydantic = pydantic_model_creator(
+    AnimalType, name="AnimalType", config_class=CamelCaseConfig
+)
+
+AnimalTypeIn_Pydantic = pydantic_model_creator(
+    AnimalType, name="AnimalTypeIn", config_class=CamelCaseConfig, exclude_readonly=True
+)

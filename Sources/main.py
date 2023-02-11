@@ -1,4 +1,5 @@
 from datetime import datetime
+from tortoise.exceptions import IntegrityError
 
 import pydantic
 import tortoise
@@ -17,7 +18,6 @@ from models import (
     Animal,
     AnimalOut,
     AnimalIn,
-    Animal_Pydantic,
     Location_Pydantic,
     Location,
     LocationIn_Pydantic,
@@ -142,7 +142,10 @@ async def delete_account(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     account = await Account.get(id=account_id)
-    await account.delete()
+    try:
+        await account.delete()
+    except IntegrityError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
 
 @app.post(
@@ -188,7 +191,10 @@ async def search_animals(
     if gender is not None:
         query = query.filter(gender=gender)
 
-    return [await AnimalOut.from_orm(e) for e in await query.offset(from_).limit(size)]
+    return [
+        await AnimalOut.from_orm(e)
+        for e in await query.order_by("id").offset(from_).limit(size)
+    ]
 
 
 @app.get("/animals/{animal_id}", response_model=AnimalOut)
@@ -209,22 +215,27 @@ async def update_animal(
     login_required(current_user)
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
-    if len(animal.visited_locations) > 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
     if (
-        animal.life_status == AnimalLifeStatus.ALIVE
-        and new_animal.life_status == AnimalLifeStatus.DEAD
+        animal.life_status == AnimalLifeStatus.DEAD
+        and new_animal.life_status == AnimalLifeStatus.ALIVE
     ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="animal is dead"
+        )
 
-    if animal.visited_locations[0] == new_animal.chipping_location_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+    if (
+        len(animal.visited_locations) > 0
+        and animal.visited_locations[0] == new_animal.chipping_location_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="has same chipping location"
+        )
 
     await animal.update_from_dict(new_animal.dict(exclude_unset=True))
 
     if animal.life_status == AnimalLifeStatus.DEAD and animal.death_date_time is None:
-        animal.death_date_time = datetime.now()
+        animal.death_date_time = datetime.utcnow()
 
     await animal.save()
     return await AnimalOut.from_orm(animal)
@@ -291,6 +302,12 @@ async def delete_location(
 ):
     login_required(current_user)
     location = await Location.get(id=location_id)
+    await location.fetch_related("chipped_animals", "visited_by")
+    if len(location.chipped_animals) > 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+    if len(location.visited_by) > 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
     await location.delete()
 
 
@@ -333,7 +350,7 @@ async def add_animal_type(
     return await AnimalOut.from_orm(animal)
 
 
-@app.put("/animals/{animal_id}/types/", response_model=AnimalOut)
+@app.put("/animals/{animal_id}/types", response_model=AnimalOut)
 async def update_animal_type(
     update_type: UpdateAnimalType,
     animal_id: int = Path(ge=1),
@@ -343,7 +360,7 @@ async def update_animal_type(
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("animal_types")
     new_type = await AnimalType.get(id=update_type.new_type_id)
-    old_type = await AnimalType.get(id=update_type.old_type_id)
+    old_type = await animal.animal_types.all().get(id=update_type.old_type_id)
     if new_type in animal.animal_types:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT)
 
@@ -354,16 +371,16 @@ async def update_animal_type(
 
 
 @app.delete("/animals/{animal_id}/types/{type_id}")
-async def delete_animal_type(
+async def delete_animal_type_relation(
     animal_id: int = Path(ge=1),
     type_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
     animal = await Animal.get(id=animal_id)
-    type_to_remove = await AnimalType.get(id=type_id)
     await animal.fetch_related("animal_types")
-    if len(animal.animal_types) == 1 and animal.animal_types[0] == type_id:
+    type_to_remove = await animal.animal_types.all().get(id=type_id)
+    if len(animal.animal_types) == 1 and animal.animal_types[0] == type_to_remove:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
     await animal.animal_types.remove(type_to_remove)
@@ -405,6 +422,9 @@ async def delete_animal_type(
 ):
     login_required(current_user)
     animal_type = await AnimalType.get(id=animal_type_id)
+    await animal_type.fetch_related("animals")
+    if len(animal_type.animals) > 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
     await animal_type.delete()
 
 
