@@ -134,9 +134,26 @@ class Animal(models.Model):
     death_date_time = fields.DatetimeField(null=True)
 
 
-Animal_Pydantic = pydantic_model_creator(
-    Animal, name="Animal", config_class=CamelCaseConfig
-)
+Animal_Pydantic = pydantic_model_creator(Animal, name="Animal", config_class=CamelCaseConfig)
+
+
+class AnimalOut(BaseModel):
+    id: int
+    animal_types: list[int]
+    weight: float
+    length: float
+    height: float
+    gender: AnimalGender
+    chipper_id: int
+    chipping_location_id: int
+    death_date_time: datetime | None
+    visited_locations: list[int]
+    life_status: AnimalLifeStatus
+    chipping_date_time: datetime
+    animal_types: list[int]
+
+    class Config(CamelCaseConfig):
+        orm_mode = True
 
 
 class AnimalIn(BaseModel):

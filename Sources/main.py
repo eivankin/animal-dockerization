@@ -13,8 +13,9 @@ from models import (
     Account_Pydantic,
     AccountIn,
     Animal,
-    Animal_Pydantic,
+    AnimalOut,
     AnimalIn,
+    Animal_Pydantic,
     Location_Pydantic,
     Location,
     LocationIn_Pydantic,
@@ -169,12 +170,27 @@ async def search_animals(
     return await Animal_Pydantic.from_queryset(Animal.all().offset(from_).limit(size))
 
 
-@app.get("/animals/{id_val}", response_model=Animal_Pydantic)
+@app.get("/animals/{id_val}", response_model=AnimalOut)
 async def get_animal(
     animal_id: int = Depends(validate_id),
     current_user: Account | None = Depends(get_current_user),
 ):
-    return await Animal_Pydantic.from_queryset_single(Animal.get(id=animal_id))
+    animal = await Animal.get(id=animal_id)
+    await animal.fetch_related()
+    return AnimalOut(
+        id=animal.id,
+        weight=animal.weight,
+        height=animal.height,
+        gender=animal.gender,
+        animal_types=[t.id for t in await animal.animal_types],
+        chipper_id=animal.chipper_id,
+        visited_locations=[lc.id for lc in await animal.visited_locations],
+        chipping_location_id=animal.chipping_location_id,
+        death_date_time=animal.death_date_time,
+        life_status=animal.life_status,
+        length=animal.length,
+        chipping_date_time=animal.chipping_date_time,
+    )
 
 
 @app.post(
@@ -310,6 +326,7 @@ async def get_animal_locations(
     current_user: Account | None = Depends(get_current_user),
 ):
     animal = await Animal.get(id=animal_id)
+    await animal.fetch_related("visited_locations")
     return await Location_Pydantic.from_queryset(animal.visited_locations)
 
 

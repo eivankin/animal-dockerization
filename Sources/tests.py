@@ -183,6 +183,14 @@ async def test_create_animal(client: AsyncClient, auth_headers: dict[str, str]):
 
 
 @pytest.mark.anyio
+async def test_get_animal(client: AsyncClient):
+    response = await client.get("/animals/1")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert "animalTypes" in data
+
+
+@pytest.mark.anyio
 async def test_delete_animal(client: AsyncClient, auth_headers: dict[str, str]):
     client.headers.update(auth_headers)
 
