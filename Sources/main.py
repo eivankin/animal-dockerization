@@ -471,18 +471,25 @@ async def add_animal_location(
     login_required(current_user)
     animal = await Animal.get(id=animal_id)
     if animal.life_status == AnimalLifeStatus.DEAD:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="animal is dead"
+        )
 
     location = await Location.get(id=location_id)
     await animal.fetch_related("visited_locations")
     if len(animal.visited_locations) == 0 and location.id == animal.chipping_location_id:  # type: ignore
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="repeating chipping location",
+        )
 
     if (
         len(animal.visited_locations) > 0
         and location.id == animal.visited_locations[-1].id
     ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="repeating location"
+        )
 
     await animal.visited_locations.add(location)
     return VisitedLocationOut.from_orm(
@@ -507,9 +514,9 @@ async def delete_animal_location(
         and location.location_point == animal.visited_locations[0]
         and animal.chipping_location == animal.visited_locations[1]
     ):
-        animal.visited_locations.remove(animal.chipping_location)
+        await animal.visited_locations.remove(await animal.chipping_location)
 
-    animal.visited_locations.remove(location)
+    await animal.visited_locations.remove(await location.location_point)
 
 
 @app.put("/animals/{animal_id}/locations", response_model=VisitedLocationOut)
@@ -539,7 +546,7 @@ async def update_animal_location(
 
     # TODO: check if new location does not match neighbors (previous or next)
 
-    visited_location.location = new_location
+    visited_location.location_point = new_location
     await visited_location.save()
     return VisitedLocationOut.from_orm(visited_location)
 
