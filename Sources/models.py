@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pydantic
+import tortoise
 from tortoise import fields, models, validators
 from tortoise.contrib.pydantic import pydantic_model_creator
 from pydantic import BaseConfig, BaseModel, EmailStr
@@ -130,7 +131,7 @@ class Animal(models.Model):
     chipping_date_time = fields.DatetimeField(auto_now_add=True)
     chipper = fields.ForeignKeyField("models.Account", on_delete=fields.RESTRICT)
     chipping_location = fields.ForeignKeyField(
-        "models.Location", on_delete=fields.RESTRICT, related_name=False
+        "models.Location", on_delete=fields.CASCADE, related_name=False
     )
     death_date_time = fields.DatetimeField(null=True)
 

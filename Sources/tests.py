@@ -189,6 +189,7 @@ async def test_get_animal(client: AsyncClient):
     data = response.json()
     assert "animalTypes" in data
 
+
 @pytest.mark.anyio
 async def test_add_animal_location(client: AsyncClient, auth_headers: dict[str, str]):
     client.headers.update(auth_headers)
@@ -205,6 +206,22 @@ async def test_add_animal_location(client: AsyncClient, auth_headers: dict[str, 
         f"/animals/1/locations/{loc_id}",
     )
     assert response.status_code == 201, response.text
+
+
+@pytest.mark.anyio
+async def test_get_animal_locations(client: AsyncClient):
+    response = await client.get("/animals/1/locations")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert len(data) > 0
+
+
+@pytest.mark.anyio
+async def test_get_animals(client: AsyncClient):
+    response = await client.get("/animals/search")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert len(data) > 0
 
 
 # @pytest.mark.anyio

@@ -28,7 +28,8 @@ from models import (
     UpdateAnimalType,
     AnimalVisitedLocation,
     UpdateVisitedLocation,
-    AnimalUpdate_Pydantic, VisitedLocationOut,
+    AnimalUpdate_Pydantic,
+    VisitedLocationOut,
 )
 
 app = FastAPI(debug=DEBUG)
@@ -161,14 +162,33 @@ async def create_account(
     )
 
 
-@app.get("/animals/search", response_model=list[Animal_Pydantic])
+@app.get("/animals/search", response_model=list[AnimalOut])
 async def search_animals(
     current_user: Account | None = Depends(get_current_user),
+    start_date_time: datetime = Query(default=None, alias="startDateTime"),
+    end_date_time: datetime = Query(default=None, alias="endDateTime"),
+    chipper_id: int = Query(default=None, alias="chipperId"),
+    chipping_location_id: int = Query(default=None, alias="chippingLocationId"),
+    life_status: AnimalLifeStatus = Query(default=None, alias="lifeStatus"),
+    gender: str = Query(default=None, alias="gender"),
     from_: int = Query(default=0, ge=0, alias="from"),
     size: int = Query(default=10, ge=1),
 ):
-    # TODO
-    return await Animal_Pydantic.from_queryset(Animal.all().offset(from_).limit(size))
+    query = Animal.all()
+    if start_date_time is not None:
+        query = query.filter(chipping_date_time__gte=start_date_time)
+    if end_date_time is not None:
+        query = query.filter(chipping_date_time__lte=end_date_time)
+    if chipper_id is not None:
+        query = query.filter(chipper__id=chipper_id)
+    if chipping_location_id is not None:
+        query = query.filter(chipping_location__id=chipping_location_id)
+    if life_status is not None:
+        query = query.filter(life_status=life_status)
+    if gender is not None:
+        query = query.filter(gender=gender)
+
+    return [await AnimalOut.from_orm(e) for e in await query.offset(from_).limit(size)]
 
 
 @app.get("/animals/{animal_id}", response_model=AnimalOut)
@@ -210,9 +230,7 @@ async def update_animal(
     return await AnimalOut.from_orm(animal)
 
 
-@app.post(
-    "/animals", response_model=Animal_Pydantic, status_code=status.HTTP_201_CREATED
-)
+@app.post("/animals", response_model=AnimalOut, status_code=status.HTTP_201_CREATED)
 async def create_animal(
     animal: AnimalIn, current_user: Account | None = Depends(get_current_user)
 ):
@@ -225,10 +243,10 @@ async def create_animal(
     data["chipper_location"] = await Location.get(id=animal.chipping_location_id)
     saved_animal = await Animal.create(**data)
     await saved_animal.animal_types.add(
-        *(e for e in await AnimalType.filter(id__in=type_ids))
+        *[await AnimalType.get(id=type_id) for type_id in type_ids]
     )
 
-    return await Animal_Pydantic.from_tortoise_orm(saved_animal)
+    return await AnimalOut.from_orm(saved_animal)
 
 
 @app.delete("/animals/{animal_id}")
@@ -390,14 +408,32 @@ async def delete_animal_type(
     await animal_type.delete()
 
 
-@app.get("/animals/{animal_id}/locations", response_model=list[Location_Pydantic])
+@app.get("/animals/{animal_id}/locations", response_model=list[VisitedLocationOut])
 async def get_animal_locations(
     animal_id: int = Path(ge=1),
+    start_date_time: datetime = Query(default=None, alias="startDateTime"),
+    end_date_time: datetime = Query(default=None, alias="endDateTime"),
+    from_: int = Query(default=0, alias="from", ge=0),
+    size: int = Query(default=10, alias="size", ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
-    return await Location_Pydantic.from_queryset(animal.visited_locations)
+    point_ids = [location.id for location in animal.visited_locations]
+    query = AnimalVisitedLocation.filter(
+        animal__id=animal_id, location_point__id__in=point_ids
+    )
+    if start_date_time is not None:
+        query = query.filter(date_time_of_visit_location_point__gte=start_date_time)
+    if end_date_time is not None:
+        query = query.filter(date_time_of_visit_location_point__lte=end_date_time)
+
+    return [
+        VisitedLocationOut.from_orm(e)
+        for e in await query.order_by("date_time_of_visit_location_point")
+        .offset(from_)
+        .limit(size)
+    ]
 
 
 @app.post(
@@ -425,7 +461,9 @@ async def add_animal_location(
 
     await animal.visited_locations.add(location)
     return VisitedLocationOut.from_orm(
-        await AnimalVisitedLocation.get(location_point__id=location_id, animal__id=animal_id)
+        await AnimalVisitedLocation.get(
+            location_point__id=location_id, animal__id=animal_id
+        )
     )
 
 
@@ -449,9 +487,7 @@ async def delete_animal_location(
     animal.visited_locations.remove(location)
 
 
-@app.put(
-    "/animals/{animal_id}/locations", response_model=VisitedLocationOut
-)
+@app.put("/animals/{animal_id}/locations", response_model=VisitedLocationOut)
 async def update_animal_location(
     update_visited_location: UpdateVisitedLocation,
     animal_id: int = Path(ge=1),
