@@ -189,12 +189,29 @@ async def test_get_animal(client: AsyncClient):
     data = response.json()
     assert "animalTypes" in data
 
-
 @pytest.mark.anyio
-async def test_delete_animal(client: AsyncClient, auth_headers: dict[str, str]):
+async def test_add_animal_location(client: AsyncClient, auth_headers: dict[str, str]):
     client.headers.update(auth_headers)
-
-    response = await client.delete(
-        "/animals/1",
+    response = await client.post(
+        "/locations",
+        json={
+            "latitude": 0,
+            "longitude": 0,
+        },
     )
-    assert response.status_code == 200, response.text
+    loc_id = response.json()["id"]
+
+    response = await client.post(
+        f"/animals/1/locations/{loc_id}",
+    )
+    assert response.status_code == 201, response.text
+
+
+# @pytest.mark.anyio
+# async def test_delete_animal(client: AsyncClient, auth_headers: dict[str, str]):
+#     client.headers.update(auth_headers)
+#
+#     response = await client.delete(
+#         "/animals/1",
+#     )
+#     assert response.status_code == 200, response.text

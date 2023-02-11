@@ -119,7 +119,10 @@ class Animal(models.Model):
     length = fields.FloatField()  # Длина в метрах
     height = fields.FloatField()  # Высота в метрах
     visited_locations = fields.ManyToManyField(
-        "models.Location", on_delete=fields.RESTRICT
+        "models.Location",
+        on_delete=fields.RESTRICT,
+        through="animal_visited_location",
+        forward_key="location_point_id",
     )
     animal_types = fields.ManyToManyField("models.AnimalType", on_delete=fields.CASCADE)
     life_status = fields.CharEnumField(AnimalLifeStatus, default=AnimalLifeStatus.ALIVE)
@@ -155,6 +158,24 @@ class AnimalOut(BaseModel):
     class Config(CamelCaseConfig):
         orm_mode = True
 
+    @classmethod
+    async def from_orm(cls, animal: Animal) -> "AnimalOut":
+        await animal.fetch_related()
+        return cls(
+            id=animal.id,
+            weight=animal.weight,
+            height=animal.height,
+            gender=animal.gender,
+            animal_types=[t.id for t in await animal.animal_types],
+            chipper_id=animal.chipper_id,  # type: ignore
+            visited_locations=[lc.id for lc in await animal.visited_locations],
+            chipping_location_id=animal.chipping_location_id,  # type: ignore
+            death_date_time=animal.death_date_time,
+            life_status=animal.life_status,
+            length=animal.length,
+            chipping_date_time=animal.chipping_date_time,
+        )
+
 
 class AnimalIn(BaseModel):
     animal_types: list[int]
@@ -164,6 +185,50 @@ class AnimalIn(BaseModel):
     gender: AnimalGender
     chipper_id: int
     chipping_location_id: int
+    life_status: AnimalLifeStatus | None = None
 
     class Config(CamelCaseConfig):
         orm_mode = True
+
+
+AnimalUpdate_Pydantic = pydantic_model_creator(
+    Animal, name="AnimalUpdate", config_class=CamelCaseConfig, exclude_readonly=True
+)
+
+
+class UpdateAnimalType(BaseModel):
+    old_type_id: int
+    new_type_id: int
+
+    class Config(CamelCaseConfig):
+        pass
+
+
+class AnimalVisitedLocation(models.Model):
+    id = fields.IntField(pk=True)
+    animal = fields.ForeignKeyField("models.Animal", on_delete=fields.CASCADE)
+    location_point = fields.ForeignKeyField("models.Location", on_delete=fields.CASCADE)
+    date_time_of_visit_location_point = fields.DatetimeField(auto_now_add=True)
+
+    class PydanticMeta:
+        exclude = ("animal",)
+
+    class Meta:
+        table = "animal_visited_location"
+
+
+class VisitedLocationOut(BaseModel):
+    id: int
+    date_time_of_visit_location_point: datetime
+    location_point_id: int
+
+    class Config(CamelCaseConfig):
+        orm_mode = True
+
+
+class UpdateVisitedLocation(BaseModel):
+    visited_location_point_id: int
+    location_point_id: int
+
+    class Config(CamelCaseConfig):
+        pass

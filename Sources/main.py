@@ -1,9 +1,11 @@
+from datetime import datetime
+
 import pydantic
 import tortoise
 from fastapi.exceptions import RequestValidationError
 from passlib.context import CryptContext
 from tortoise.contrib.fastapi import register_tortoise
-from fastapi import FastAPI, Depends, status, HTTPException, Query
+from fastapi import FastAPI, Depends, status, HTTPException, Query, Path
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import PlainTextResponse
 
@@ -22,6 +24,11 @@ from models import (
     AnimalType,
     AnimalType_Pydantic,
     AnimalTypeIn_Pydantic,
+    AnimalLifeStatus,
+    UpdateAnimalType,
+    AnimalVisitedLocation,
+    UpdateVisitedLocation,
+    AnimalUpdate_Pydantic, VisitedLocationOut,
 )
 
 app = FastAPI(debug=DEBUG)
@@ -38,19 +45,19 @@ def login_required(user: Account | None) -> None:
 
 @app.exception_handler(tortoise.exceptions.IntegrityError)
 async def integrity_exception_handler(request, exc):
-    return PlainTextResponse(str(exc), status_code=409)
+    return PlainTextResponse(str(exc), status_code=status.HTTP_409_CONFLICT)
 
 
 @app.exception_handler(tortoise.exceptions.DoesNotExist)
 async def not_found_exception_handler(request, exc):
-    return PlainTextResponse(str(exc), status_code=404)
+    return PlainTextResponse(str(exc), status_code=status.HTTP_404_NOT_FOUND)
 
 
 @app.exception_handler(RequestValidationError)
 @app.exception_handler(pydantic.error_wrappers.ValidationError)
 @app.exception_handler(tortoise.exceptions.ValidationError)
 async def validation_exception_handler(request, exc):
-    return PlainTextResponse(str(exc), status_code=400)
+    return PlainTextResponse(str(exc), status_code=status.HTTP_400_BAD_REQUEST)
 
 
 def verify_password(plain_password, hashed_password):
@@ -76,12 +83,6 @@ async def get_current_user(
     )
 
 
-def validate_id(id_val: int) -> int:
-    if id_val < 1:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
-    return id_val
-
-
 @app.get("/accounts/search", response_model=list[Account_Pydantic])
 async def search_account(
     current_user: Account | None = Depends(get_current_user),
@@ -104,18 +105,18 @@ async def search_account(
     )
 
 
-@app.get("/accounts/{id_val}", response_model=Account_Pydantic)
+@app.get("/accounts/{account_id}", response_model=Account_Pydantic)
 async def get_account(
-    account_id: int = Depends(validate_id),
+    account_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     return await Account_Pydantic.from_queryset_single(Account.get(id=account_id))
 
 
-@app.put("/accounts/{id_val}", response_model=Account_Pydantic)
+@app.put("/accounts/{account_id}", response_model=Account_Pydantic)
 async def update_account(
     new_account: AccountIn,
-    account_id: int = Depends(validate_id),
+    account_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
@@ -130,9 +131,9 @@ async def update_account(
     return account
 
 
-@app.delete("/accounts/{id_val}")
+@app.delete("/accounts/{account_id}")
 async def delete_account(
-    account_id: int = Depends(validate_id),
+    account_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
@@ -170,27 +171,43 @@ async def search_animals(
     return await Animal_Pydantic.from_queryset(Animal.all().offset(from_).limit(size))
 
 
-@app.get("/animals/{id_val}", response_model=AnimalOut)
+@app.get("/animals/{animal_id}", response_model=AnimalOut)
 async def get_animal(
-    animal_id: int = Depends(validate_id),
+    animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     animal = await Animal.get(id=animal_id)
-    await animal.fetch_related()
-    return AnimalOut(
-        id=animal.id,
-        weight=animal.weight,
-        height=animal.height,
-        gender=animal.gender,
-        animal_types=[t.id for t in await animal.animal_types],
-        chipper_id=animal.chipper_id,  # type: ignore
-        visited_locations=[lc.id for lc in await animal.visited_locations],
-        chipping_location_id=animal.chipping_location_id,  # type: ignore
-        death_date_time=animal.death_date_time,
-        life_status=animal.life_status,
-        length=animal.length,
-        chipping_date_time=animal.chipping_date_time,
-    )
+    return await AnimalOut.from_orm(animal)
+
+
+@app.put("/animals/{animal_id}", response_model=AnimalOut)
+async def update_animal(
+    new_animal: AnimalUpdate_Pydantic,
+    animal_id: int = Path(ge=1),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    animal = await Animal.get(id=animal_id)
+    await animal.fetch_related("visited_locations")
+    if len(animal.visited_locations) > 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    if (
+        animal.life_status == AnimalLifeStatus.ALIVE
+        and new_animal.life_status == AnimalLifeStatus.DEAD
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    if animal.visited_locations[0] == new_animal.chipping_location_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    await animal.update_from_dict(new_animal.dict(exclude_unset=True))
+
+    if animal.life_status == AnimalLifeStatus.DEAD and animal.death_date_time is None:
+        animal.death_date_time = datetime.now()
+
+    await animal.save()
+    return await AnimalOut.from_orm(animal)
 
 
 @app.post(
@@ -214,9 +231,9 @@ async def create_animal(
     return await Animal_Pydantic.from_tortoise_orm(saved_animal)
 
 
-@app.delete("/animals/{id_val}")
+@app.delete("/animals/{animal_id}")
 async def delete_animal(
-    animal_id: int = Depends(validate_id),
+    animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
@@ -228,9 +245,9 @@ async def delete_animal(
     await animal.delete()
 
 
-@app.get("/locations/{id_val}", response_model=Location_Pydantic)
+@app.get("/locations/{location_id}", response_model=Location_Pydantic)
 async def get_location(
-    location_id: int = Depends(validate_id),
+    location_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     return await Location_Pydantic.from_queryset_single(Location.get(id=location_id))
@@ -249,9 +266,9 @@ async def create_location(
     )
 
 
-@app.delete("/locations/{id_val}")
+@app.delete("/locations/{location_id}")
 async def delete_location(
-    location_id: int = Depends(validate_id),
+    location_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
@@ -259,10 +276,10 @@ async def delete_location(
     await location.delete()
 
 
-@app.put("/locations/{id_val}", response_model=Location_Pydantic)
+@app.put("/locations/{location_id}", response_model=Location_Pydantic)
 async def update_location(
     new_location: LocationIn_Pydantic,
-    location_id: int = Depends(validate_id),
+    location_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
@@ -272,14 +289,67 @@ async def update_location(
     return location
 
 
-@app.get("/animals/types/{id_val}", response_model=AnimalType_Pydantic)
-async def get_animal_type(
-    animal_type_id: int = Depends(validate_id),
+@app.get("/animals/types/{animal_type_id}", response_model=AnimalType_Pydantic)
+async def get_animal_types(
+    animal_type_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     return await AnimalType_Pydantic.from_queryset_single(
         AnimalType.get(id=animal_type_id)
     )
+
+
+@app.post(
+    "/animals/{animal_id}/types/{type_id}",
+    response_model=AnimalOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_animal_type(
+    animal_id: int = Path(ge=1),
+    type_id: int = Path(ge=1),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    animal = await Animal.get(id=animal_id)
+    await animal.animal_types.add(await AnimalType.get(id=type_id))
+    return await AnimalOut.from_orm(animal)
+
+
+@app.put("/animals/{animal_id}/types/", response_model=AnimalOut)
+async def update_animal_type(
+    update_type: UpdateAnimalType,
+    animal_id: int = Path(ge=1),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    animal = await Animal.get(id=animal_id)
+    await animal.fetch_related("animal_types")
+    new_type = await AnimalType.get(id=update_type.new_type_id)
+    old_type = await AnimalType.get(id=update_type.old_type_id)
+    if new_type in animal.animal_types:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+
+    await animal.animal_types.remove(old_type)
+    await animal.animal_types.add(new_type)
+
+    return await AnimalOut.from_orm(animal)
+
+
+@app.delete("/animals/{animal_id}/types/{type_id}")
+async def delete_animal_type(
+    animal_id: int = Path(ge=1),
+    type_id: int = Path(ge=1),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    animal = await Animal.get(id=animal_id)
+    type_to_remove = await AnimalType.get(id=type_id)
+    await animal.fetch_related("animal_types")
+    if len(animal.animal_types) == 1 and animal.animal_types[0] == type_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    await animal.animal_types.remove(type_to_remove)
+    return await AnimalOut.from_orm(animal)
 
 
 @app.post(
@@ -297,10 +367,10 @@ async def create_animal_type(
     )
 
 
-@app.put("/animals/types/{id_val}", response_model=AnimalType_Pydantic)
+@app.put("/animals/types/{animal_type_id}", response_model=AnimalType_Pydantic)
 async def update_animal_type(
     new_type: AnimalTypeIn_Pydantic,
-    animal_type_id: int = Depends(validate_id),
+    animal_type_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
@@ -310,9 +380,9 @@ async def update_animal_type(
     return animal_type
 
 
-@app.delete("/animals/types/{id_val}")
+@app.delete("/animals/types/{animal_type_id}")
 async def delete_animal_type(
-    animal_type_id: int = Depends(validate_id),
+    animal_type_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
@@ -320,14 +390,97 @@ async def delete_animal_type(
     await animal_type.delete()
 
 
-@app.get("/animals/{id_val}/locations", response_model=list[Location_Pydantic])
+@app.get("/animals/{animal_id}/locations", response_model=list[Location_Pydantic])
 async def get_animal_locations(
-    animal_id: int = Depends(validate_id),
+    animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
     return await Location_Pydantic.from_queryset(animal.visited_locations)
+
+
+@app.post(
+    "/animals/{animal_id}/locations/{location_id}",
+    response_model=VisitedLocationOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_animal_location(
+    animal_id: int = Path(ge=1),
+    location_id: int = Path(ge=1),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    animal = await Animal.get(id=animal_id)
+    if animal.life_status == AnimalLifeStatus.DEAD:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    location = await Location.get(id=location_id)
+    await animal.fetch_related("visited_locations")
+    if len(animal.visited_locations) == 0 and location == animal.chipping_location:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    if len(animal.visited_locations) > 0 and location == animal.visited_locations[-1]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    await animal.visited_locations.add(location)
+    return VisitedLocationOut.from_orm(
+        await AnimalVisitedLocation.get(location_point__id=location_id, animal__id=animal_id)
+    )
+
+
+@app.delete("/animals/{animal_id}/locations/{location_id}")
+async def delete_animal_location(
+    animal_id: int = Path(ge=1),
+    location_id: int = Path(ge=1),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    animal = await Animal.get(id=animal_id)
+    location = await Location.get(id=location_id)
+    await animal.fetch_related("visited_locations", "chipping_location")
+    if (
+        len(animal.visited_locations) >= 2
+        and location == animal.visited_locations[0]
+        and animal.chipping_location == animal.visited_locations[1]
+    ):
+        animal.visited_locations.remove(animal.chipping_location)
+
+    animal.visited_locations.remove(location)
+
+
+@app.put(
+    "/animals/{animal_id}/locations", response_model=VisitedLocationOut
+)
+async def update_animal_location(
+    update_visited_location: UpdateVisitedLocation,
+    animal_id: int = Path(ge=1),
+    current_user: Account | None = Depends(get_current_user),
+):
+    login_required(current_user)
+    animal = await Animal.get(id=animal_id)
+    await animal.fetch_related("visited_locations")
+    new_location = await Location.get(id=update_visited_location.location_point_id)
+    visited_location = await AnimalVisitedLocation.get(
+        id=update_visited_location.visited_location_point_id
+    )
+
+    if visited_location.location == new_location:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    if (
+        len(animal.visited_locations) > 0
+        and animal.visited_locations[0].id
+        == update_visited_location.visited_location_point_id
+        and new_location == animal.chipping_location
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+    # TODO: check if new location does not match neighbors (previous or next)
+
+    visited_location.location = new_location
+    await visited_location.save()
+    return VisitedLocationOut.from_orm(visited_location)
 
 
 register_tortoise(
