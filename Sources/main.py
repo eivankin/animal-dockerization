@@ -183,9 +183,9 @@ async def get_animal(
         height=animal.height,
         gender=animal.gender,
         animal_types=[t.id for t in await animal.animal_types],
-        chipper_id=animal.chipper_id,
+        chipper_id=animal.chipper_id,  # type: ignore
         visited_locations=[lc.id for lc in await animal.visited_locations],
-        chipping_location_id=animal.chipping_location_id,
+        chipping_location_id=animal.chipping_location_id,  # type: ignore
         death_date_time=animal.death_date_time,
         life_status=animal.life_status,
         length=animal.length,

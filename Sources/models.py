@@ -121,9 +121,7 @@ class Animal(models.Model):
     visited_locations = fields.ManyToManyField(
         "models.Location", on_delete=fields.RESTRICT
     )
-    animal_types = fields.ManyToManyField(
-        "models.AnimalType", on_delete=fields.CASCADE
-    )
+    animal_types = fields.ManyToManyField("models.AnimalType", on_delete=fields.CASCADE)
     life_status = fields.CharEnumField(AnimalLifeStatus, default=AnimalLifeStatus.ALIVE)
     gender = fields.CharEnumField(AnimalGender)
     chipping_date_time = fields.DatetimeField(auto_now_add=True)
@@ -134,7 +132,9 @@ class Animal(models.Model):
     death_date_time = fields.DatetimeField(null=True)
 
 
-Animal_Pydantic = pydantic_model_creator(Animal, name="Animal", config_class=CamelCaseConfig)
+Animal_Pydantic = pydantic_model_creator(
+    Animal, name="Animal", config_class=CamelCaseConfig
+)
 
 
 class AnimalOut(BaseModel):
