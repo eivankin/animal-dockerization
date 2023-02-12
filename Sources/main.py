@@ -226,7 +226,8 @@ async def update_animal(
 
     if (
         len(animal.visited_locations) > 0
-        and animal.visited_locations[0].id == new_animal.chipping_location_id
+        and animal.visited_locations[0].location_point_id
+        == new_animal.chipping_location_id
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="has same chipping location"
@@ -304,10 +305,11 @@ async def delete_location(
 ):
     login_required(current_user)
     location = await Location.get(id=location_id)
-    await location.fetch_related("chipped_animals", "visited_by")
+    await location.fetch_related("chipped_animals")
     if len(location.chipped_animals) > 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
-    if len(location.visited_by) > 0:
+    visited_by = await AnimalVisitedLocation.filter(location_point_id=location_id)
+    if len(visited_by) > 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
     await location.delete()
@@ -382,7 +384,7 @@ async def delete_animal_type_relation(
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("animal_types")
     type_to_remove = await animal.animal_types.all().get(id=type_id)
-    if len(animal.animal_types) == 1 and animal.animal_types[0] == type_to_remove:
+    if len(animal.animal_types) == 1:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
     await animal.animal_types.remove(type_to_remove)
@@ -441,7 +443,7 @@ async def get_animal_locations(
 ):
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
-    query = animal.visited_locations_junction.all()
+    query = animal.visited_locations.all()
     if start_date_time is not None:
         query = query.filter(date_time_of_visit_location_point__gte=start_date_time)
     if end_date_time is not None:
@@ -474,8 +476,10 @@ async def add_animal_location(
 
     location = await Location.get(id=location_id)
     await animal.fetch_related("visited_locations")
-    if len(animal.visited_locations) == 0 \
-            and location.id == animal.chipping_location_id:  # type: ignore
+    if (
+        len(animal.visited_locations) == 0
+        and location.id == animal.chipping_location_id
+    ):  # type: ignore
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="repeating chipping location",
@@ -483,16 +487,16 @@ async def add_animal_location(
 
     if (
         len(animal.visited_locations) > 0
-        and location_id == animal.visited_locations[-1].id
+        and location_id == animal.visited_locations[-1].location_point_id
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="repeating location"
         )
 
-    await animal.visited_locations.add(location)
-    return VisitedLocationOut.from_orm(
-        await animal.visited_locations_junction.all().get(location_point_id=location_id)
+    visited_location = await AnimalVisitedLocation.create(
+        animal=animal, location_point=location
     )
+    return VisitedLocationOut.from_orm(await visited_location)
 
 
 @app.delete("/animals/{animal_id}/locations/{location_id}")
@@ -507,14 +511,16 @@ async def delete_animal_location(
     if location.animal_id != animal_id:  # type: ignore
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await animal.fetch_related("visited_locations", "chipping_location")
+    sorted_locations = await animal.visited_locations.all().order_by(
+        "date_time_of_visit_location_point"
+    )
     if (
-        len(animal.visited_locations) >= 2
-        and location.location_point_id == animal.visited_locations[0].id  # type: ignore
-        and animal.chipping_location_id == animal.visited_locations[1].id  # type: ignore
+        len(sorted_locations) >= 2
+        and location_id == sorted_locations[0].id  # type: ignore
+        and animal.chipping_location_id == sorted_locations[1].location_point_id  # type: ignore
     ):
-        await animal.visited_locations.remove(await animal.chipping_location)
-    # else:  # uncomment to pass all tests
-    await animal.visited_locations.remove(await location.location_point)
+        await sorted_locations[1].delete()
+    await location.delete()
 
 
 @app.put("/animals/{animal_id}/locations", response_model=VisitedLocationOut)
@@ -531,7 +537,9 @@ async def update_animal_location(
         id=update_visited_location.visited_location_point_id
     )
     if new_location.id == visited_location.location_point_id:  # type: ignore
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="same location")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="same location"
+        )
 
     if visited_location.animal_id != animal_id:  # type: ignore
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -539,7 +547,7 @@ async def update_animal_location(
     if visited_location.location_point == new_location:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-    sorted_locations = await animal.visited_locations_junction.order_by(
+    sorted_locations = await animal.visited_locations.order_by(
         "date_time_of_visit_location_point"
     )
 

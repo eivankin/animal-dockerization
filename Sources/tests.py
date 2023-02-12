@@ -242,6 +242,35 @@ async def test_get_animal_locations(client: AsyncClient):
 
 
 @pytest.mark.anyio
+async def test_remove_before_chipping_location(client: AsyncClient):
+    response = await client.get("/animals/1/locations")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert len(data) == 1, data
+
+    response = await client.post("/animals/1/locations/1")
+    assert response.status_code == 201, response.text
+
+    response = await client.post("/animals/1/locations/2")
+    assert response.status_code == 201, response.text
+
+    response = await client.get("/animals/1/locations")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert len(data) == 3, data
+
+    response = await client.delete(
+        "/animals/1/locations/1",
+    )
+    assert response.status_code == 200, response.text
+
+    response = await client.get("/animals/1/locations")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert len(data) == 1
+
+
+@pytest.mark.anyio
 async def test_get_animals(client: AsyncClient):
     response = await client.get("/animals/search")
     assert response.status_code == 200, response.text

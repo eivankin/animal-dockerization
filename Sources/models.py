@@ -72,14 +72,7 @@ class Animal(models.Model):
     weight = fields.FloatField()  # Масса в кг
     length = fields.FloatField()  # Длина в метрах
     height = fields.FloatField()  # Высота в метрах
-    visited_locations = fields.ManyToManyField(
-        "models.Location",
-        on_delete=fields.RESTRICT,
-        through="animal_visited_location",
-        forward_key="location_point_id",
-        related_name="visited_by",
-    )
-    visited_locations_junction: fields.ForeignKeyRelation
+    visited_locations: fields.ForeignKeyRelation
     animal_types = fields.ManyToManyField(
         "models.AnimalType", on_delete=fields.CASCADE, related_name="animals"
     )
@@ -203,7 +196,7 @@ class AnimalVisitedLocation(models.Model):
     animal = fields.ForeignKeyField(
         "models.Animal",
         on_delete=fields.CASCADE,
-        related_name="visited_locations_junction",
+        related_name="visited_locations",
     )
     location_point = fields.ForeignKeyField(
         "models.Location", on_delete=fields.RESTRICT
@@ -267,7 +260,6 @@ class Location(models.Model):
         unique=True,
     )
     chipped_animals: fields.ForeignKeyRelation[Animal]
-    visited_by: fields.ManyToManyRelation[Animal]
 
 
 Location_Pydantic = pydantic_model_creator(
