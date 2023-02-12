@@ -255,10 +255,9 @@ async def create_animal(
     del data["animal_types"]
     data["chipper"] = await Account.get(id=animal.chipper_id)
     data["chipper_location"] = await Location.get(id=animal.chipping_location_id)
+    types = [await AnimalType.get(id=type_id) for type_id in type_ids]
     saved_animal = await Animal.create(**data)
-    await saved_animal.animal_types.add(
-        *[await AnimalType.get(id=type_id) for type_id in type_ids]
-    )
+    await saved_animal.animal_types.add(*types)
 
     return await AnimalOut.from_orm(saved_animal)
 
@@ -478,8 +477,8 @@ async def add_animal_location(
     await animal.fetch_related("visited_locations")
     if (
         len(animal.visited_locations) == 0
-        and location.id == animal.chipping_location_id
-    ):  # type: ignore
+        and location.id == animal.chipping_location_id  # type: ignore
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="repeating chipping location",
