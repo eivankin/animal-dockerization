@@ -8,6 +8,7 @@ from fastapi.responses import PlainTextResponse
 from config import DB_URL, DEBUG
 from models import orm
 from routers import root_router
+from routers.users.utils import get_password_hash
 
 app = FastAPI(debug=DEBUG)
 app.include_router(root_router)
@@ -36,3 +37,29 @@ register_tortoise(
     modules={"models": [orm]},
     generate_schemas=True,
 )
+
+
+@app.on_event("startup")
+async def create_accounts():
+    default_pwd = get_password_hash("qwerty123")
+    await orm.Account.get_or_create(
+        first_name="adminFirstName",
+        last_name="adminLastName",
+        email="admin@simbirsoft.com",
+        password_hash=default_pwd,
+        role=orm.AccountRole.ADMIN,
+    )
+    await orm.Account.get_or_create(
+        first_name="chipperFirstName",
+        last_name="chipperLastName",
+        email="chipper@simbirsoft.com",
+        password_hash=default_pwd,
+        role=orm.AccountRole.CHIPPER,
+    )
+    await orm.Account.get_or_create(
+        first_name="userFirstName",
+        last_name="userLastName",
+        email="user@simbirsoft.com",
+        password_hash=default_pwd,
+        role=orm.AccountRole.USER,
+    )

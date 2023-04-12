@@ -16,6 +16,7 @@ from .orm import (
     AnimalType,
     Animal,
     AnimalVisitedLocation,
+    AccountRole,
 )
 
 
@@ -49,6 +50,10 @@ class AccountIn(AbstractCamelCaseModel):
         for validator in NON_BLANK_VALIDATORS:
             validator(v)
         return v
+
+
+class AccountInWithRole(AccountIn):
+    role: AccountRole
 
 
 class AnimalOut(AbstractCamelCaseModel):

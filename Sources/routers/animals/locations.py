@@ -7,7 +7,7 @@ from models.orm import (
     Animal,
     AnimalLifeStatus,
     Location,
-    AnimalVisitedLocation,
+    AnimalVisitedLocation, AccountRole,
 )
 from models.pydantic import VisitedLocationOut, UpdateVisitedLocation
 from routers.users.utils import get_current_user, login_required
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/{animal_id}/locations")
 
 
 @router.get("", response_model=list[VisitedLocationOut])
+@login_required()
 async def get_animal_locations(
     animal_id: int = Path(ge=1),
     start_date_time: datetime = Query(default=None, alias="startDateTime"),
@@ -45,12 +46,12 @@ async def get_animal_locations(
     response_model=VisitedLocationOut,
     status_code=status.HTTP_201_CREATED,
 )
+@login_required(AccountRole.CHIPPER)
 async def add_animal_location(
     animal_id: int = Path(ge=1),
     location_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    login_required(current_user)
     animal = await Animal.get(id=animal_id)
     if animal.life_status == AnimalLifeStatus.DEAD:
         raise HTTPException(
@@ -83,12 +84,12 @@ async def add_animal_location(
 
 
 @router.delete("/{location_id}")
+@login_required(AccountRole.ADMIN)
 async def delete_animal_location(
     animal_id: int = Path(ge=1),
     location_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    login_required(current_user)
     animal = await Animal.get(id=animal_id)
     location = await AnimalVisitedLocation.get(id=location_id)
     if location.animal_id != animal_id:  # type: ignore
@@ -107,12 +108,12 @@ async def delete_animal_location(
 
 
 @router.put("", response_model=VisitedLocationOut)
+@login_required(AccountRole.CHIPPER)
 async def update_animal_location(
     update_visited_location: UpdateVisitedLocation,
     animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    login_required(current_user)
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
     new_location = await Location.get(id=update_visited_location.location_point_id)

@@ -10,6 +10,24 @@ NON_BLANK_VALIDATORS = [
 ]
 
 
+class AccountRole(enum.StrEnum):
+    """Порядок перечисления прав используется для сравнения ролей"""
+
+    ADMIN = "ADMIN"  # Наибольшие права доступа
+    CHIPPER = "CHIPPER"
+    USER = "USER"  # Наименьшие права доступа
+
+    @classmethod
+    def __get_val_idx(cls, value):
+        return list(cls).index(value)
+
+    def __lt__(self, other):
+        """Чем выше (ближе к старту списка) роль, тем больше у неё прав"""
+        self_idx = self.__get_val_idx(self)
+        other_idx = self.__get_val_idx(other)
+        return self_idx > other_idx
+
+
 class Account(models.Model):
     id = fields.IntField(pk=True)
 
@@ -20,6 +38,7 @@ class Account(models.Model):
         unique=True,
     )
     password_hash = fields.CharField(max_length=128)
+    role = fields.CharEnumField(AccountRole, default=AccountRole.USER)
 
     class PydanticMeta:
         exclude = ["password_hash"]

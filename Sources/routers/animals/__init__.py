@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query, Depends, Path, HTTPException, status
 
-from models.orm import Animal, AnimalLifeStatus, Account, Location, AnimalType
+from models.orm import Animal, AnimalLifeStatus, Account, Location, AnimalType, AccountRole
 from models.pydantic import AnimalOut, UpdateAnimal, AnimalIn
 from routers.users.utils import get_current_user, login_required
 from routers.animals import locations, all_types, animal_types
@@ -14,6 +14,7 @@ router.include_router(animal_types.router)
 
 
 @router.get("/search", response_model=list[AnimalOut])
+@login_required()
 async def search_animals(
     current_user: Account | None = Depends(get_current_user),
     start_date_time: datetime = Query(default=None, alias="startDateTime"),
@@ -46,6 +47,7 @@ async def search_animals(
 
 
 @router.get("/{animal_id}", response_model=AnimalOut)
+@login_required()
 async def get_animal(
     animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
@@ -55,12 +57,12 @@ async def get_animal(
 
 
 @router.put("/{animal_id}", response_model=AnimalOut)
+@login_required(AccountRole.CHIPPER)
 async def update_animal(
     new_animal: UpdateAnimal,
     animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    login_required(current_user)
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
 
@@ -93,10 +95,10 @@ async def update_animal(
 
 
 @router.post("", response_model=AnimalOut, status_code=status.HTTP_201_CREATED)
+@login_required(AccountRole.CHIPPER)
 async def create_animal(
     animal: AnimalIn, current_user: Account | None = Depends(get_current_user)
 ):
-    login_required(current_user)
     type_ids = animal.animal_types
     data = animal.dict(exclude_unset=True)
     del data["animal_types"]
@@ -110,11 +112,11 @@ async def create_animal(
 
 
 @router.delete("/{animal_id}")
+@login_required(AccountRole.ADMIN)
 async def delete_animal(
     animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    login_required(current_user)
 
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")

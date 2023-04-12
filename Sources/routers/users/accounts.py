@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status, Path
 from tortoise.exceptions import IntegrityError
 
-from models.orm import Account
-from models.pydantic import AccountOut, AccountIn
-from routers.users.utils import get_current_user, login_required, get_password_hash
+from models.orm import Account, AccountRole
+from models.pydantic import AccountOut, AccountIn, AccountInWithRole
+from routers.users.utils import get_current_user, get_password_hash, login_required
 
 router = APIRouter(prefix="/accounts")
 
 
 @router.get("/search", response_model=list[AccountOut])
+@login_required(AccountRole.ADMIN)
 async def search_account(
     current_user: Account | None = Depends(get_current_user),
     first_name_like: str = Query(default=None, alias="firstName"),
@@ -31,21 +32,36 @@ async def search_account(
 
 
 @router.get("/{account_id}", response_model=AccountOut)
+@login_required()
 async def get_account(
     account_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
+    if current_user.id != account_id and current_user.role != AccountRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     return await AccountOut.from_queryset_single(Account.get(id=account_id))
 
 
+@router.post("", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
+@login_required(AccountRole.ADMIN)
+async def create_account(
+    new_account: AccountInWithRole,
+    current_user: Account | None = Depends(get_current_user),
+):
+    pwd_hash = get_password_hash(new_account.password)
+    return await AccountOut.from_tortoise_orm(
+        await Account.create(**new_account.dict(), password_hash=pwd_hash)
+    )
+
+
 @router.put("/{account_id}", response_model=AccountOut)
+@login_required()
 async def update_account(
-    new_account: AccountIn,
+    new_account: AccountInWithRole,
     account_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    login_required(current_user)
-    if current_user.id != account_id:
+    if current_user.id != account_id and current_user.role != AccountRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     account = await Account.get(id=account_id)
@@ -57,12 +73,12 @@ async def update_account(
 
 
 @router.delete("/{account_id}")
+@login_required()
 async def delete_account(
     account_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    login_required(current_user)
-    if current_user.id != account_id:
+    if current_user.id != account_id and current_user.role != AccountRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     account = await Account.get(id=account_id)
