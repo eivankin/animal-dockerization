@@ -84,7 +84,6 @@ class Location(models.Model):
             validators.MaxValueValidator(90),
             validators.MinValueValidator(-90),
         ],
-        unique=True,
     )
 
     # Долгота
@@ -93,9 +92,11 @@ class Location(models.Model):
             validators.MaxValueValidator(180),
             validators.MinValueValidator(-180),
         ],
-        unique=True,
     )
     chipped_animals: fields.ForeignKeyRelation[Animal]
+
+    class Meta:
+        unique_together = (("latitude", "longitude"),)
 
 
 class AnimalType(models.Model):
