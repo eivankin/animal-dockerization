@@ -4,7 +4,8 @@ import pytest
 from asgi_lifespan import LifespanManager
 from httpx import AsyncClient
 from main import app
-from models import Account, AccountIn
+from models.pydantic import AccountIn
+from models.orm import Account
 
 TEST_ACCOUNT = AccountIn(
     **{
@@ -18,6 +19,9 @@ BAD_HEADER = (
     "Basic ZWQ4YzgwZDAtMjZlZi00NjEzLWFiOGYtNGVkNDkxZjAyOTNkOjMxZjc3NThkL"
     "WZhMTYtNDJmNy1iNjMzLWNjYmYxYzIzNmQ3Nw=="
 )
+ANIMAL_LOCATION_ENDPOINT = "/animals/1/locations/1"
+REGISTRATION_ENDPOINT = "/registration"
+LOCATIONS_ENDPOINT = "/animals/1/locations"
 
 
 @pytest.fixture(scope="module")
@@ -43,7 +47,7 @@ def auth_headers() -> dict[str, str]:
 @pytest.mark.anyio
 async def test_create_user(client: AsyncClient):
     response = await client.post(
-        "/registration",
+        REGISTRATION_ENDPOINT,
         json=TEST_ACCOUNT.dict(),
     )
     assert response.status_code == 201, response.text
@@ -61,7 +65,7 @@ async def test_create_user_invalid_email(client: AsyncClient):
     account = TEST_ACCOUNT.copy()
     account.email = "sus"
     response = await client.post(
-        "/registration",
+        REGISTRATION_ENDPOINT,
         json=account.dict(),
     )
     assert response.status_code == 400, response.text
@@ -72,7 +76,7 @@ async def test_create_user_blank_field(client: AsyncClient):
     account = TEST_ACCOUNT.copy()
     account.first_name = " "
     response = await client.post(
-        "/registration",
+        REGISTRATION_ENDPOINT,
         json=account.dict(),
     )
     assert response.status_code == 400, response.text
@@ -107,7 +111,7 @@ async def test_get_user_unauthorized(client: AsyncClient, auth_headers: dict[str
 async def test_get_user_negative_id(client: AsyncClient, auth_headers: dict[str, str]):
     client.headers.update(auth_headers)
     response = await client.get(
-        f"/accounts/-1",
+        "/accounts/-1",
     )
     assert response.status_code == 400, response.text
 
@@ -120,7 +124,7 @@ async def test_create_user_not_unique_email(client: AsyncClient):
     account.last_name = "test"
     client.headers.clear()
     response = await client.post(
-        "/registration",
+        REGISTRATION_ENDPOINT,
         json=account.dict(),
     )
     assert response.status_code == 409, response.text
@@ -151,7 +155,7 @@ async def test_delete_nonexistent_location(
 ):
     client.headers.update(auth_headers)
     response = await client.delete(
-        f"/locations/1",
+        "/locations/1",
     )
     assert response.status_code == 404, response.text
 
@@ -195,7 +199,7 @@ async def test_get_animal(client: AsyncClient):
 @pytest.mark.anyio
 async def test_add_chipping_location(client: AsyncClient):
     response = await client.post(
-        "/animals/1/locations/1",
+        ANIMAL_LOCATION_ENDPOINT,
     )
     assert response.status_code == 400, response.text
 
@@ -224,7 +228,7 @@ async def test_change_to_chipping_location(
 ):
     client.headers.update(auth_headers)
     response = await client.put(
-        "/animals/1/locations",
+        LOCATIONS_ENDPOINT,
         json={
             "visitedLocationPointId": 1,
             "locationPointId": 1,
@@ -235,7 +239,7 @@ async def test_change_to_chipping_location(
 
 @pytest.mark.anyio
 async def test_get_animal_locations(client: AsyncClient):
-    response = await client.get("/animals/1/locations")
+    response = await client.get(LOCATIONS_ENDPOINT)
     assert response.status_code == 200, response.text
     data = response.json()
     assert len(data) > 0
@@ -243,28 +247,28 @@ async def test_get_animal_locations(client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_remove_before_chipping_location(client: AsyncClient):
-    response = await client.get("/animals/1/locations")
+    response = await client.get(LOCATIONS_ENDPOINT)
     assert response.status_code == 200, response.text
     data = response.json()
     assert len(data) == 1, data
 
-    response = await client.post("/animals/1/locations/1")
+    response = await client.post(ANIMAL_LOCATION_ENDPOINT)
     assert response.status_code == 201, response.text
 
     response = await client.post("/animals/1/locations/2")
     assert response.status_code == 201, response.text
 
-    response = await client.get("/animals/1/locations")
+    response = await client.get(LOCATIONS_ENDPOINT)
     assert response.status_code == 200, response.text
     data = response.json()
     assert len(data) == 3, data
 
     response = await client.delete(
-        "/animals/1/locations/1",
+        ANIMAL_LOCATION_ENDPOINT,
     )
     assert response.status_code == 200, response.text
 
-    response = await client.get("/animals/1/locations")
+    response = await client.get(LOCATIONS_ENDPOINT)
     assert response.status_code == 200, response.text
     data = response.json()
     assert len(data) == 1

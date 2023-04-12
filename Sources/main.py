@@ -10,27 +10,30 @@ from fastapi import FastAPI, Depends, status, HTTPException, Query, Path
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import PlainTextResponse
 
-from constants import DB_URL, DEBUG
-from models import (
+from config import DB_URL, DEBUG
+from models.orm import (
     Account,
-    Account_Pydantic,
-    AccountIn,
     Animal,
-    AnimalOut,
-    AnimalIn,
-    Location_Pydantic,
     Location,
-    LocationIn_Pydantic,
     AnimalType,
-    AnimalType_Pydantic,
-    AnimalTypeIn_Pydantic,
     AnimalLifeStatus,
-    UpdateAnimalType,
     AnimalVisitedLocation,
-    UpdateVisitedLocation,
-    VisitedLocationOut,
-    AnimalUpdate,
 )
+from models.pydantic import (
+    AccountIn,
+    AccountOut,
+    AnimalIn,
+    AnimalOut,
+    AnimalTypeIn,
+    AnimalTypeOut,
+    LocationIn,
+    LocationOut,
+    VisitedLocationOut,
+    UpdateAnimal,
+    UpdateAnimalType,
+    UpdateVisitedLocation,
+)
+from models import orm
 
 app = FastAPI(debug=DEBUG)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -84,7 +87,7 @@ async def get_current_user(
     )
 
 
-@app.get("/accounts/search", response_model=list[Account_Pydantic])
+@app.get("/accounts/search", response_model=list[AccountOut])
 async def search_account(
     current_user: Account | None = Depends(get_current_user),
     first_name_like: str = Query(default=None, alias="firstName"),
@@ -101,20 +104,20 @@ async def search_account(
     if email_like is not None and len(email_like) > 0:
         query = query.filter(email__icontains=email_like)
 
-    return await Account_Pydantic.from_queryset(
+    return await AccountOut.from_queryset(
         query.order_by("id").offset(from_).limit(size)
     )
 
 
-@app.get("/accounts/{account_id}", response_model=Account_Pydantic)
+@app.get("/accounts/{account_id}", response_model=AccountOut)
 async def get_account(
     account_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    return await Account_Pydantic.from_queryset_single(Account.get(id=account_id))
+    return await AccountOut.from_queryset_single(Account.get(id=account_id))
 
 
-@app.put("/accounts/{account_id}", response_model=Account_Pydantic)
+@app.put("/accounts/{account_id}", response_model=AccountOut)
 async def update_account(
     new_account: AccountIn,
     account_id: int = Path(ge=1),
@@ -150,7 +153,7 @@ async def delete_account(
 
 @app.post(
     "/registration",
-    response_model=Account_Pydantic,
+    response_model=AccountOut,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_account(
@@ -160,7 +163,7 @@ async def create_account(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     pwd_hash = get_password_hash(account.password)
-    return await Account_Pydantic.from_tortoise_orm(
+    return await AccountOut.from_tortoise_orm(
         await Account.create(**account.dict(), password_hash=pwd_hash)
     )
 
@@ -208,7 +211,7 @@ async def get_animal(
 
 @app.put("/animals/{animal_id}", response_model=AnimalOut)
 async def update_animal(
-    new_animal: AnimalUpdate,
+    new_animal: UpdateAnimal,
     animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
@@ -248,7 +251,6 @@ async def update_animal(
 async def create_animal(
     animal: AnimalIn, current_user: Account | None = Depends(get_current_user)
 ):
-
     login_required(current_user)
     type_ids = animal.animal_types
     data = animal.dict(exclude_unset=True)
@@ -276,23 +278,21 @@ async def delete_animal(
     await animal.delete()
 
 
-@app.get("/locations/{location_id}", response_model=Location_Pydantic)
+@app.get("/locations/{location_id}", response_model=LocationOut)
 async def get_location(
     location_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    return await Location_Pydantic.from_queryset_single(Location.get(id=location_id))
+    return await LocationOut.from_queryset_single(Location.get(id=location_id))
 
 
-@app.post(
-    "/locations", response_model=Location_Pydantic, status_code=status.HTTP_201_CREATED
-)
+@app.post("/locations", response_model=LocationOut, status_code=status.HTTP_201_CREATED)
 async def create_location(
-    location: LocationIn_Pydantic,
+    location: LocationIn,
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
-    return await Location_Pydantic.from_tortoise_orm(
+    return await LocationOut.from_tortoise_orm(
         await Location.create(**location.dict(exclude_unset=True))
     )
 
@@ -314,9 +314,9 @@ async def delete_location(
     await location.delete()
 
 
-@app.put("/locations/{location_id}", response_model=Location_Pydantic)
+@app.put("/locations/{location_id}", response_model=LocationOut)
 async def update_location(
-    new_location: LocationIn_Pydantic,
+    new_location: LocationIn,
     location_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
@@ -327,14 +327,12 @@ async def update_location(
     return location
 
 
-@app.get("/animals/types/{animal_type_id}", response_model=AnimalType_Pydantic)
+@app.get("/animals/types/{animal_type_id}", response_model=AnimalTypeOut)
 async def get_animal_types(
     animal_type_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-    return await AnimalType_Pydantic.from_queryset_single(
-        AnimalType.get(id=animal_type_id)
-    )
+    return await AnimalTypeOut.from_queryset_single(AnimalType.get(id=animal_type_id))
 
 
 @app.post(
@@ -392,22 +390,22 @@ async def delete_animal_type_relation(
 
 @app.post(
     "/animals/types",
-    response_model=AnimalType_Pydantic,
+    response_model=AnimalTypeOut,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_animal_type(
-    animal_type: AnimalTypeIn_Pydantic,
+    animal_type: AnimalTypeIn,
     current_user: Account | None = Depends(get_current_user),
 ):
     login_required(current_user)
-    return await AnimalType_Pydantic.from_tortoise_orm(
+    return await AnimalTypeOut.from_tortoise_orm(
         await AnimalType.create(**animal_type.dict(exclude_unset=True))
     )
 
 
-@app.put("/animals/types/{animal_type_id}", response_model=AnimalType_Pydantic)
+@app.put("/animals/types/{animal_type_id}", response_model=AnimalTypeOut)
 async def update_assigned_animal_type(
-    new_type: AnimalTypeIn_Pydantic,
+    new_type: AnimalTypeIn,
     animal_type_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
@@ -582,6 +580,6 @@ async def update_animal_location(
 register_tortoise(
     app=app,
     db_url=DB_URL,
-    modules={"models": ["models"]},
+    modules={"models": [orm]},
     generate_schemas=True,
 )
