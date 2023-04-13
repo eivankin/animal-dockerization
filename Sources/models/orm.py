@@ -1,6 +1,9 @@
 import enum
+from typing import Type
 
-from tortoise import models, fields, validators
+from shapely import Polygon, to_wkb, from_wkb
+from tortoise import models, fields, validators, signals
+from tortoise.exceptions import IntegrityError
 
 NON_BLANK_REGEX = r"[^\s]"
 
@@ -124,3 +127,61 @@ class AnimalType(models.Model):
         max_length=255, unique=True, validators=NON_BLANK_VALIDATORS
     )
     animals: fields.ManyToManyRelation[Animal]
+
+
+class PolygonField(fields.BinaryField):
+    def to_db_value(
+        self, value: Polygon | None, instance: Type[models.Model] | models.Model
+    ) -> bytes:
+        return to_wkb(value)
+
+    def to_python_value(self, value: bytes | Polygon) -> Polygon:
+        if isinstance(value, Polygon):
+            return value
+
+        return from_wkb(value)
+
+
+class Area(models.Model):
+    name = fields.CharField(
+        max_length=255, unique=True, validators=NON_BLANK_VALIDATORS
+    )
+    area_points = PolygonField()
+
+
+@signals.pre_save(Area)
+async def validate_area(
+    sender: "Type[Area]", instance: Area, using_db, update_fields: list[str]
+) -> None:
+    if not instance.area_points.is_valid:
+        raise validators.ValidationError("Некорректный полигон")
+
+    saved_instance = await Area.get_or_none(id=instance.pk)
+    if saved_instance is None or not saved_instance.area_points.equals(
+        instance.area_points
+    ):
+        current_area = instance.area_points
+        other_areas: list[Polygon] = [
+            a.area_points
+            for a in await Area.all()
+            if saved_instance is None or a.pk != saved_instance.pk
+        ]
+
+        for other in other_areas:
+            if current_area.equals(other):
+                raise IntegrityError(
+                    f"Новая зона не может совпадать с границами других зон\n"
+                    f"{current_area=}\n{other=}"
+                )
+            if current_area.overlaps(other):
+                raise validators.ValidationError(
+                    f"Новая зона не может пересекать границы других зон\n{current_area=}\n{other=}"
+                )
+            if current_area.contains(other):
+                raise validators.ValidationError(
+                    f"Новая зона не может содержать границы других зон\n{current_area=}\n{other=}"
+                )
+            if other.contains(current_area):
+                raise validators.ValidationError(
+                    f"Новая зона не может быть внутри границы других зон\n{current_area=}\n{other=}"
+                )

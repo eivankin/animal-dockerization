@@ -2,7 +2,14 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query, Depends, Path, HTTPException, status
 
-from models.orm import Animal, AnimalLifeStatus, Account, Location, AnimalType, AccountRole
+from models.orm import (
+    Animal,
+    AnimalLifeStatus,
+    Account,
+    Location,
+    AnimalType,
+    AccountRole,
+)
 from models.pydantic import AnimalOut, UpdateAnimal, AnimalIn
 from routers.users.utils import get_current_user, login_required
 from routers.animals import locations, all_types, animal_types
@@ -117,7 +124,6 @@ async def delete_animal(
     animal_id: int = Path(ge=1),
     current_user: Account | None = Depends(get_current_user),
 ):
-
     animal = await Animal.get(id=animal_id)
     await animal.fetch_related("visited_locations")
     if len(animal.visited_locations) > 0:

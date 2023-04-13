@@ -7,7 +7,8 @@ from models.orm import (
     Animal,
     AnimalLifeStatus,
     Location,
-    AnimalVisitedLocation, AccountRole,
+    AnimalVisitedLocation,
+    AccountRole,
 )
 from models.pydantic import VisitedLocationOut, UpdateVisitedLocation
 from routers.users.utils import get_current_user, login_required
