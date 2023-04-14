@@ -4,6 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from tortoise.contrib.fastapi import register_tortoise
 from fastapi import FastAPI, status
 from fastapi.responses import PlainTextResponse
+import uvicorn
 
 from config import DB_URL, DEBUG
 from models import orm
@@ -63,3 +64,7 @@ async def create_accounts():
         password_hash=default_pwd,
         role=orm.AccountRole.USER,
     )
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8080)

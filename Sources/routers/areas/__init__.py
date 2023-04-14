@@ -3,8 +3,10 @@ from fastapi import APIRouter, Path, Depends, status
 from models.orm import Account, Area, AccountRole
 from models.pydantic import AreaOut, AreaIn
 from routers.users.utils import login_required, get_current_user
+from routers.areas import analytics
 
 router = APIRouter(prefix="/areas")
+router.include_router(analytics.router)
 
 
 @router.get("/{area_id}", response_model=AreaOut)

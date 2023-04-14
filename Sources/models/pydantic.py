@@ -205,3 +205,18 @@ class PolygonField(Polygon):
 
 class AreaIn(__AreaIn):
     area_points: PolygonField
+
+
+class AnimalTypeAnalytics(AbstractCamelCaseModel):
+    animal_type: str
+    animal_type_id: int = 0
+    quantity_animals: int = 0
+    animals_arrived: int = 0
+    animals_gone: int = 0
+
+
+class AreaAnalytics(AbstractCamelCaseModel):
+    total_quantity_animals: int = 0
+    total_animals_arrived: int = 0
+    total_animals_gone: int = 0
+    animals_analytics: list[AnimalTypeAnalytics] = []

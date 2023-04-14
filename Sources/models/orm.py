@@ -44,7 +44,7 @@ class Account(models.Model):
     role = fields.CharEnumField(AccountRole, default=AccountRole.USER)
 
     class PydanticMeta:
-        exclude = ["password_hash"]
+        exclude = ("password_hash",)
 
 
 class AnimalVisitedLocation(models.Model):
@@ -55,7 +55,7 @@ class AnimalVisitedLocation(models.Model):
         related_name="visited_locations",
     )
     location_point = fields.ForeignKeyField(
-        "models.Location", on_delete=fields.RESTRICT
+        "models.Location", on_delete=fields.RESTRICT, related_name="visits"
     )
     date_time_of_visit_location_point = fields.DatetimeField(auto_now_add=True)
 
@@ -116,6 +116,7 @@ class Location(models.Model):
         ],
     )
     chipped_animals: fields.ForeignKeyRelation[Animal]
+    visits: fields.ForeignKeyRelation[AnimalVisitedLocation]
 
     class Meta:
         unique_together = (("latitude", "longitude"),)
