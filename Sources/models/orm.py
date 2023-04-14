@@ -57,6 +57,7 @@ class AnimalVisitedLocation(models.Model):
     location_point = fields.ForeignKeyField(
         "models.Location", on_delete=fields.RESTRICT, related_name="visits"
     )
+    location_point_id: int
     date_time_of_visit_location_point = fields.DatetimeField(auto_now_add=True)
 
     class PydanticMeta:
@@ -91,9 +92,11 @@ class Animal(models.Model):
     gender = fields.CharEnumField(AnimalGender)
     chipping_date_time = fields.DatetimeField(auto_now_add=True)
     chipper = fields.ForeignKeyField("models.Account", on_delete=fields.RESTRICT)
+    chipper_id: int
     chipping_location = fields.ForeignKeyField(
         "models.Location", on_delete=fields.CASCADE, related_name="chipped_animals"
     )
+    chipping_location_id: int
     death_date_time = fields.DatetimeField(null=True)
 
 

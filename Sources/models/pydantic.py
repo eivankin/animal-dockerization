@@ -88,11 +88,11 @@ class AnimalOut(AbstractCamelCaseModel):
             height=animal.height,
             gender=animal.gender,
             animal_types=[t.id for t in await animal.animal_types],
-            chipper_id=animal.chipper_id,  # type: ignore
+            chipper_id=animal.chipper_id,
             visited_locations=[
                 lc.id for lc in await AnimalVisitedLocation.filter(animal_id=animal.id)
             ],
-            chipping_location_id=animal.chipping_location_id,  # type: ignore
+            chipping_location_id=animal.chipping_location_id,
             death_date_time=animal.death_date_time,
             life_status=animal.life_status,
             length=animal.length,
@@ -186,10 +186,10 @@ class PolygonField(Polygon):
         if any(
             first_point == second_point
             for i, first_point in enumerate(v)
-            for second_point in v[:i] + v[i + 1 :]
+            for second_point in v[:i] + v[i + 1:]
         ):
             raise ValidationError("Полигон содержит повторяющиеся точки")
-        return cls([(loc.latitude, loc.longitude) for loc in v])
+        return cls([(loc.latitude, loc.longitude) for loc in v])  # type: ignore
 
     @classmethod
     def __modify_schema__(cls, field_schema):
@@ -220,3 +220,8 @@ class AreaAnalytics(AbstractCamelCaseModel):
     total_animals_arrived: int = 0
     total_animals_gone: int = 0
     animals_analytics: list[AnimalTypeAnalytics] = []
+
+
+class VisitedLocationInfo(BaseModel):
+    is_in_dates: bool
+    is_in_area: bool

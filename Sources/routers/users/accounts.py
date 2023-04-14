@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status, Path
 from tortoise.exceptions import IntegrityError
 
 from models.orm import Account, AccountRole
-from models.pydantic import AccountOut, AccountIn, AccountInWithRole
+from models.pydantic import AccountOut, AccountInWithRole
 from routers.users.utils import get_current_user, get_password_hash, login_required
 
 router = APIRouter(prefix="/accounts")
