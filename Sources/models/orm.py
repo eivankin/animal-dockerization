@@ -1,5 +1,5 @@
 import enum
-from typing import Type
+from typing import Type, Callable
 
 from shapely import Polygon, to_wkb, from_wkb
 from tortoise import models, fields, validators, signals
@@ -150,6 +150,28 @@ class Area(models.Model):
     area_points = PolygonField()
 
 
+AREA_VALIDATORS: list[tuple[Callable[[Polygon, Polygon], bool], Exception]] = [
+    (
+        lambda inst, other: inst.equals(other),
+        IntegrityError("Новая зона не может совпадать с границами других зон"),
+    ),
+    (
+        lambda inst, other: inst.overlaps(other),
+        validators.ValidationError("Новая зона не может пересекать границы других зон"),
+    ),
+    (
+        lambda inst, other: inst.contains(other),
+        validators.ValidationError("Новая зона не может содержать границы других зон"),
+    ),
+    (
+        lambda inst, other: other.contains(inst),
+        validators.ValidationError(
+            "Новая зона не может быть внутри границы других зон"
+        ),
+    ),
+]
+
+
 @signals.pre_save(Area)
 async def validate_area(
     sender: "Type[Area]", instance: Area, using_db, update_fields: list[str]
@@ -169,20 +191,6 @@ async def validate_area(
         ]
 
         for other in other_areas:
-            if current_area.equals(other):
-                raise IntegrityError(
-                    f"Новая зона не может совпадать с границами других зон\n"
-                    f"{current_area=}\n{other=}"
-                )
-            if current_area.overlaps(other):
-                raise validators.ValidationError(
-                    f"Новая зона не может пересекать границы других зон\n{current_area=}\n{other=}"
-                )
-            if current_area.contains(other):
-                raise validators.ValidationError(
-                    f"Новая зона не может содержать границы других зон\n{current_area=}\n{other=}"
-                )
-            if other.contains(current_area):
-                raise validators.ValidationError(
-                    f"Новая зона не может быть внутри границы других зон\n{current_area=}\n{other=}"
-                )
+            for check, err in AREA_VALIDATORS:
+                if check(current_area, other):
+                    raise err
