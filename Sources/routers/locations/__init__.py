@@ -3,8 +3,20 @@ from fastapi import APIRouter, Path, Depends, status, HTTPException
 from models.orm import Account, Location, AnimalVisitedLocation, AccountRole
 from models.pydantic import LocationOut, LocationIn
 from routers.users.utils import get_current_user, login_required
+from routers.locations import geohash
 
 router = APIRouter(prefix="/locations")
+router.include_router(geohash.router)
+
+
+@router.get("", response_model=int)
+@login_required()
+async def get_location_id(
+    location: LocationIn = Depends(geohash.valid_location),
+    current_user: Account | None = Depends(get_current_user),
+):
+    location = await Location.get(latitude=location.latitude, longitude=location.longitude)
+    return location.id
 
 
 @router.get("/{location_id}", response_model=LocationOut)
